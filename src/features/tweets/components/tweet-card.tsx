@@ -9,21 +9,29 @@ import { ReplyModal } from './reply-modal';
 import { QuoteModal } from './quote-modal';
 import { useRouter } from 'next/navigation';
 import { MediaGallery } from '@/features/media/components/viewers/MediaGallery';
+import { TweetMenu } from './tweet-menu';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 
 export function TweetCard({ tweet }: { tweet: any }) {
+  const currentUser = useAuthStore(state => state.user);
   const router = useRouter();
-  const [isLiked, setIsLiked] = useState(tweet.is_liked || false);
-  const [isBookmarked, setIsBookmarked] = useState(tweet.is_bookmarked || false);
-  const [likeCount, setLikeCount] = useState(tweet.like_count || 0);
-  const [bookmarkCount, setBookmarkCount] = useState(tweet.bookmark_count || 0);
-  const [retweetCount, setRetweetCount] = useState(tweet.retweet_count || 0);
+  const isRetweet = tweet.type === 1;
+  const isQuoteTweet = tweet.type === 3;
+  const displayTweet = (isRetweet && tweet.parent_tweet) ? tweet.parent_tweet : tweet;
+
+  const [isLiked, setIsLiked] = useState(displayTweet.is_liked || false);
+  const [isBookmarked, setIsBookmarked] = useState(displayTweet.is_bookmarked || false);
+  const [likeCount, setLikeCount] = useState(displayTweet.like_count || 0);
+  const [bookmarkCount, setBookmarkCount] = useState(displayTweet.bookmark_count || 0);
+  const [retweetCount, setRetweetCount] = useState(displayTweet.retweet_count || 0);
+  const [isRetweeted, setIsRetweeted] = useState(displayTweet.is_retweeted || false);
   
   const [isReplyModalOpen, setIsReplyModalOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [showRetweetMenu, setShowRetweetMenu] = useState(false);
 
   const likeMutation = useMutation({
-    mutationFn: () => isLiked ? tweetService.unlikeTweet(tweet._id) : tweetService.likeTweet(tweet._id),
+    mutationFn: () => isLiked ? tweetService.unlikeTweet(displayTweet._id) : tweetService.likeTweet(displayTweet._id),
     onMutate: () => {
       setIsLiked(!isLiked);
       setLikeCount((prev: number) => isLiked ? prev - 1 : prev + 1);
@@ -36,7 +44,7 @@ export function TweetCard({ tweet }: { tweet: any }) {
   });
 
   const bookmarkMutation = useMutation({
-    mutationFn: () => isBookmarked ? tweetService.unbookmarkTweet(tweet._id) : tweetService.bookmarkTweet(tweet._id),
+    mutationFn: () => isBookmarked ? tweetService.unbookmarkTweet(displayTweet._id) : tweetService.bookmarkTweet(displayTweet._id),
     onMutate: () => {
       setIsBookmarked(!isBookmarked);
       setBookmarkCount((prev: number) => isBookmarked ? prev - 1 : prev + 1);
@@ -53,12 +61,13 @@ export function TweetCard({ tweet }: { tweet: any }) {
       type: 1, // TweetType.Retweet
       audience: 0,
       content: '',
-      parent_id: tweet._id,
+      parent_id: displayTweet._id,
       hashtags: [],
       mentions: [],
       medias: []
     }),
     onSuccess: () => {
+      setIsRetweeted(true);
       setRetweetCount((prev: number) => prev + 1);
       setShowRetweetMenu(false);
     }
@@ -67,8 +76,8 @@ export function TweetCard({ tweet }: { tweet: any }) {
   // Calculate time ago
   let timeAgo = '';
   try {
-    if (tweet.created_at) {
-      timeAgo = formatDistanceToNowStrict(new Date(tweet.created_at));
+    if (displayTweet.created_at) {
+      timeAgo = formatDistanceToNowStrict(new Date(displayTweet.created_at));
       timeAgo = timeAgo.replace(' seconds', 's').replace(' minutes', 'm').replace(' hours', 'h').replace(' days', 'd');
     }
   } catch (e) {
@@ -93,10 +102,23 @@ export function TweetCard({ tweet }: { tweet: any }) {
     setShowRetweetMenu(!showRetweetMenu);
   };
 
+  const unretweetMutation = useMutation({
+    mutationFn: () => tweetService.unretweet(displayTweet._id),
+    onSuccess: () => {
+      setIsRetweeted(false);
+      setRetweetCount((prev: number) => Math.max(0, prev - 1));
+      setShowRetweetMenu(false);
+    }
+  });
+
   const handleRetweet = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    retweetMutation.mutate();
+    if (isRetweeted) {
+      unretweetMutation.mutate();
+    } else {
+      retweetMutation.mutate();
+    }
   };
 
   const handleQuoteTweet = (e: React.MouseEvent) => {
@@ -107,15 +129,22 @@ export function TweetCard({ tweet }: { tweet: any }) {
   };
 
   const handleCardClick = () => {
-    router.push(`/tweet/${tweet._id}`);
+    router.push(`/tweet/${displayTweet._id}`);
   };
 
   return (
-    <div onClick={handleCardClick} className="border-b border-[#2F3336] p-4 flex gap-4 hover:bg-white/5 transition-colors cursor-pointer outline-none">
-      <Link href={`/profile/${tweet.author?.username}`} onClick={(e) => e.stopPropagation()}>
+    <div onClick={handleCardClick} className="border-b border-[#2F3336] hover:bg-white/5 transition-colors cursor-pointer outline-none flex flex-col">
+      {isRetweet && tweet.parent_tweet && (
+        <div className="flex items-center gap-2 text-gray-500 text-[13px] font-bold pt-3 px-4 ml-10">
+          <Repeat2 className="w-4 h-4" />
+          <span>{currentUser?._id === tweet.user_id ? 'Bạn' : tweet.author?.name} đã đăng lại</span>
+        </div>
+      )}
+      <div className="p-4 flex gap-4 pt-2">
+      <Link href={`/profile/${displayTweet.author?.username}`} onClick={(e) => e.stopPropagation()}>
         <div className="w-10 h-10 bg-[#333639] rounded-full flex-shrink-0 overflow-hidden">
-          {tweet.author?.avatar ? (
-            <img src={tweet.author.avatar} alt={tweet.author?.name} className="w-full h-full object-cover" />
+          {displayTweet.author?.avatar ? (
+            <img src={displayTweet.author.avatar} alt={displayTweet.author?.name} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full" />
           )}
@@ -124,24 +153,61 @@ export function TweetCard({ tweet }: { tweet: any }) {
       
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
-          <Link href={`/profile/${tweet.author?.username}`} className="flex items-center gap-2 truncate group" onClick={(e) => e.stopPropagation()}>
-            <span className="font-bold group-hover:underline truncate">{tweet.author?.name || 'Unknown'}</span>
-            <span className="text-gray-500 truncate">@{tweet.author?.username || 'unknown'}</span>
+          <Link href={`/profile/${displayTweet.author?.username}`} className="flex items-center gap-2 truncate group" onClick={(e) => e.stopPropagation()}>
+            <span className="font-bold group-hover:underline truncate">{displayTweet.author?.name || 'Unknown'}</span>
+            <span className="text-gray-500 truncate">@{displayTweet.author?.username || 'unknown'}</span>
             <span className="text-gray-500">·</span>
             <span className="text-gray-500 text-sm hover:underline shrink-0">
               {timeAgo}
             </span>
           </Link>
-          <div className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#1d9bf0]/10 group transition-colors shrink-0">
-            <MoreHorizontal className="w-5 h-5 text-gray-500 group-hover:text-[#1d9bf0]" />
-          </div>
+          <TweetMenu tweet={displayTweet} />
         </div>
         
         <div className="mt-1 text-[15px] whitespace-pre-wrap break-words leading-relaxed">
-          {tweet.content}
+          {displayTweet.content.split(/(#[a-zA-Z0-9_]+)/g).map((part: string, i: number) => {
+            if (part.startsWith('#')) {
+              // Extract the word without '#' for the search query
+              const tag = part.slice(1);
+              return (
+                <Link 
+                  key={i} 
+                  href={`/search?q=${encodeURIComponent('%23' + tag)}`} 
+                  onClick={(e) => e.stopPropagation()} 
+                  className="text-[#1d9bf0] hover:underline"
+                >
+                  {part}
+                </Link>
+              );
+            }
+            return <span key={i}>{part}</span>;
+          })}
         </div>
         
-        <MediaGallery medias={tweet.medias_info} />
+                <MediaGallery medias={displayTweet.medias_info} />
+        
+        {isQuoteTweet && displayTweet.parent_tweet && (
+          <div 
+            className="mt-3 border border-[#2F3336] rounded-xl p-3 hover:bg-white/5 transition-colors"
+            onClick={(e) => { e.stopPropagation(); router.push(`/tweet/${displayTweet.parent_tweet._id}`); }}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-5 h-5 bg-[#333639] rounded-full overflow-hidden">
+                {displayTweet.parent_tweet.author?.avatar && (
+                  <img src={displayTweet.parent_tweet.author.avatar} alt="" className="w-full h-full object-cover" />
+                )}
+              </div>
+              <span className="font-bold text-[15px]">{displayTweet.parent_tweet.author?.name}</span>
+              <span className="text-gray-500 text-[15px]">@{displayTweet.parent_tweet.author?.username}</span>
+            </div>
+            <div className="text-[15px] whitespace-pre-wrap break-words leading-relaxed mb-2">
+              {displayTweet.parent_tweet.content}
+            </div>
+            {displayTweet.parent_tweet.medias_info && displayTweet.parent_tweet.medias_info.length > 0 && (
+              <MediaGallery medias={displayTweet.parent_tweet.medias_info} />
+            )}
+          </div>
+        )}
         
         {/* Actions */}
         <div className="flex items-center justify-between mt-3 text-gray-500 max-w-md">
@@ -152,15 +218,15 @@ export function TweetCard({ tweet }: { tweet: any }) {
             <div className="w-8 h-8 rounded-full flex items-center justify-center group-hover:bg-[#1d9bf0]/10 transition-colors">
               <MessageCircle className="w-4 h-4" />
             </div>
-            <span className="text-xs">{tweet.reply_count || 0}</span>
+            <span className="text-xs">{displayTweet.reply_count || 0}</span>
           </div>
           
           <div className="relative">
             <div 
-              className="flex items-center gap-2 group hover:text-[#00ba7c] transition-colors cursor-pointer" 
+              className={`flex items-center gap-2 group transition-colors cursor-pointer ${isRetweeted ? 'text-[#00ba7c]' : 'hover:text-[#00ba7c]'}`} 
               onClick={handleRetweetClick}
             >
-              <div className="w-8 h-8 rounded-full flex items-center justify-center group-hover:bg-[#00ba7c]/10 transition-colors">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isRetweeted ? 'bg-[#00ba7c]/10' : 'group-hover:bg-[#00ba7c]/10'}`}>
                 <Repeat2 className="w-4 h-4" />
               </div>
               <span className="text-xs">{retweetCount}</span>
@@ -171,7 +237,7 @@ export function TweetCard({ tweet }: { tweet: any }) {
                 <div className="absolute top-full left-0 mt-1 bg-black shadow-[0_0_15px_rgba(255,255,255,0.2)] rounded-xl py-2 w-40 z-50 overflow-hidden text-white" onClick={e => e.stopPropagation()}>
                   <button onClick={handleRetweet} className="w-full text-left px-4 py-2.5 hover:bg-white/10 transition-colors flex items-center gap-3">
                     <Repeat2 className="w-4 h-4" />
-                    <span className="font-bold text-[15px]">Retweet</span>
+                    <span className="font-bold text-[15px]">{isRetweeted ? 'Undo Retweet' : 'Retweet'}</span>
                   </button>
                   <button onClick={handleQuoteTweet} className="w-full text-left px-4 py-2.5 hover:bg-white/10 transition-colors flex items-center gap-3">
                     <FileText className="w-4 h-4" />
@@ -196,7 +262,7 @@ export function TweetCard({ tweet }: { tweet: any }) {
             <div className="w-8 h-8 rounded-full flex items-center justify-center group-hover:bg-[#1d9bf0]/10 transition-colors">
               <BarChart2 className="w-4 h-4" />
             </div>
-            <span className="text-xs">{tweet.user_views || tweet.guest_views || 0}</span>
+            <span className="text-xs">{displayTweet.user_views || displayTweet.guest_views || 0}</span>
           </div>
           
           <div className="flex items-center gap-2">
@@ -214,13 +280,14 @@ export function TweetCard({ tweet }: { tweet: any }) {
       </div>
 
       <ReplyModal 
-        tweet={tweet} 
+        tweet={displayTweet} 
         isOpen={isReplyModalOpen} 
         onClose={() => setIsReplyModalOpen(false)} 
       />
       
+      </div>
       <QuoteModal
-        tweet={tweet}
+        tweet={displayTweet}
         isOpen={isQuoteModalOpen}
         onClose={() => setIsQuoteModalOpen(false)}
       />

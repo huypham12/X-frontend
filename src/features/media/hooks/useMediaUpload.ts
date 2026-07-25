@@ -38,7 +38,7 @@ export const useMediaUpload = ({ maxFiles = 4, onMaxFilesError }: UseMediaUpload
       }
 
       // Backend returns either 'data' or 'result' array depending on the exact DTO
-      const mediaArray = res.data || res.result;
+      const mediaArray: any[] = (res as any).data || (res as any).result || [];
       const uploadedMedia = mediaArray[0];
 
       setMediaItems((prev) =>

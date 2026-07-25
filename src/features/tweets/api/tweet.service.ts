@@ -16,6 +16,21 @@ export const tweetService = {
     return res.data;
   },
 
+  getUserReplies: async (username: string, limit = 10, cursor?: string) => {
+    const res = await apiClient.get(`/user/${username}/replies`, { params: { limit, cursor } });
+    return res.data;
+  },
+
+  getUserLikes: async (username: string, limit = 10, cursor?: string) => {
+    const res = await apiClient.get(`/user/${username}/likes`, { params: { limit, cursor } });
+    return res.data;
+  },
+
+  getUserMedia: async (username: string, limit = 10, cursor?: string) => {
+    const res = await apiClient.get(`/user/${username}/media`, { params: { limit, cursor } });
+    return res.data;
+  },
+
   createTweet: async (data: {
     type: number;
     audience: number;
@@ -31,6 +46,11 @@ export const tweetService = {
 
   likeTweet: async (tweet_id: string) => {
     const res = await apiClient.post(`/tweets/${tweet_id}/like`);
+    return res.data;
+  },
+
+  unretweet: async (tweet_id: string) => {
+    const res = await apiClient.delete(`/tweets/${tweet_id}/retweet`);
     return res.data;
   },
 
@@ -51,6 +71,11 @@ export const tweetService = {
 
   deleteTweet: async (tweet_id: string) => {
     const res = await apiClient.delete(`/tweets/${tweet_id}`);
+    return res.data;
+  },
+
+  updateTweet: async (tweet_id: string, data: { content?: string; audience?: number; hashtags?: string[]; mentions?: string[]; medias?: string[] }) => {
+    const res = await apiClient.patch(`/tweets/${tweet_id}`, data);
     return res.data;
   },
 

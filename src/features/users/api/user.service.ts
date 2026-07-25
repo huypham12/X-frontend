@@ -21,6 +21,14 @@ export const userService = {
     const res = await apiClient.delete(`/user/${followed_user_id}/follow`);
     return res.data;
   },
+  blockUser: async (blocked_user_id: string) => {
+    const res = await apiClient.post(`/user/${blocked_user_id}/block`);
+    return res.data;
+  },
+  unblockUser: async (blocked_user_id: string) => {
+    const res = await apiClient.delete(`/user/${blocked_user_id}/block`);
+    return res.data;
+  },
   getFollowers: async (target_user_id: string) => {
     const res = await apiClient.get(`/user/${target_user_id}/followers`);
     return res.data;

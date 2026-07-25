@@ -119,9 +119,14 @@ export function QuoteModal({ tweet, isOpen, onClose }: QuoteModalProps) {
                   <span className="text-gray-500">·</span>
                   <span className="text-gray-500">{timeAgo}</span>
                 </div>
-                <div className="text-[15px] whitespace-pre-wrap mt-1">
-                  {tweet.content}
-                </div>
+                  <div className="mt-1 text-[15px] whitespace-pre-wrap break-words">
+                    {tweet.content.split(/(#[a-zA-Z0-9_]+)/g).map((part: string, i: number) => {
+                      if (part.startsWith('#')) {
+                        return <span key={i} className="text-[#1d9bf0] hover:underline">{part}</span>;
+                      }
+                      return <span key={i}>{part}</span>;
+                    })}
+                  </div>
               </div>
               
               <div className="border-t border-[#2F3336] mt-2 pt-3 flex items-center justify-between">

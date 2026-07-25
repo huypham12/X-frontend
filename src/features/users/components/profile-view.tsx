@@ -17,6 +17,7 @@ export function ProfileView({ username }: ProfileViewProps) {
   const currentUser = useAuthStore((state) => state.user);
   const [mounted, setMounted] = useState(false);
   const [followListType, setFollowListType] = useState<'followers' | 'following' | null>(null);
+  const [activeTab, setActiveTab] = useState<'posts' | 'replies' | 'bookmarks' | 'media' | 'likes'>('posts');
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -61,6 +62,14 @@ export function ProfileView({ username }: ProfileViewProps) {
     }
   };
 
+  const tabs = [
+    { id: 'posts', label: 'Posts' },
+    { id: 'replies', label: 'Replies' },
+    { id: 'bookmarks', label: 'Bookmarks', hidden: !isOwnProfile },
+    { id: 'media', label: 'Media' },
+    { id: 'likes', label: 'Likes' }
+  ];
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Header */}
@@ -70,7 +79,7 @@ export function ProfileView({ username }: ProfileViewProps) {
         </Link>
         <div>
           <h1 className="font-bold text-xl leading-tight">{displayUser?.name || 'User'}</h1>
-          <p className="text-sm text-gray-500 leading-tight">0 posts</p>
+          <p className="text-sm text-gray-500 leading-tight">{displayUser?.tweet_count || 0} posts</p>
         </div>
       </div>
 
@@ -147,29 +156,25 @@ export function ProfileView({ username }: ProfileViewProps) {
 
       {/* Tabs */}
       <div className="flex border-b border-[#2F3336]">
-        <div className="flex-1 hover:bg-[#181818] cursor-pointer transition-colors flex justify-center items-center h-14">
-          <div className="relative h-full flex items-center">
-            <span className="font-bold">Posts</span>
-            <div className="absolute bottom-0 left-0 w-full h-1 bg-[#1d9bf0] rounded-full" />
+        {tabs.filter(t => !t.hidden).map((tab) => (
+          <div 
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex-1 hover:bg-[#181818] cursor-pointer transition-colors flex justify-center items-center h-14 ${activeTab !== tab.id ? 'text-gray-500' : ''}`}
+          >
+            <div className="relative h-full flex items-center">
+              <span className={`font-medium ${activeTab === tab.id ? 'font-bold text-white' : ''}`}>{tab.label}</span>
+              {activeTab === tab.id && (
+                <div className="absolute bottom-0 left-0 w-full h-1 bg-[#1d9bf0] rounded-full" />
+              )}
+            </div>
           </div>
-        </div>
-        <div className="flex-1 hover:bg-[#181818] cursor-pointer transition-colors flex justify-center items-center h-14 text-gray-500">
-          <span className="font-medium">Replies</span>
-        </div>
-        <div className="flex-1 hover:bg-[#181818] cursor-pointer transition-colors flex justify-center items-center h-14 text-gray-500">
-          <span className="font-medium">Highlights</span>
-        </div>
-        <div className="flex-1 hover:bg-[#181818] cursor-pointer transition-colors flex justify-center items-center h-14 text-gray-500">
-          <span className="font-medium">Media</span>
-        </div>
-        <div className="flex-1 hover:bg-[#181818] cursor-pointer transition-colors flex justify-center items-center h-14 text-gray-500">
-          <span className="font-medium">Likes</span>
-        </div>
+        ))}
       </div>
 
       {/* Feed Content */}
       <div className="flex-1 min-h-[500px]">
-        {displayUser?.username && <ProfileFeed username={displayUser.username} />}
+        {displayUser?.username && <ProfileFeed username={displayUser.username} activeTab={activeTab} />}
       </div>
 
       {isOwnProfile && followListType && (

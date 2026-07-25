@@ -5,11 +5,23 @@ import { useEffect } from 'react';
 import { tweetService } from '@/features/tweets/api/tweet.service';
 import { TweetCard } from '@/features/tweets/components/tweet-card';
 
-export function ProfileFeed({ username }: { username: string }) {
+export function ProfileFeed({ username, activeTab = 'posts' }: { username: string, activeTab?: 'posts' | 'replies' | 'bookmarks' | 'media' | 'likes' }) {
   const { ref, inView } = useInView();
 
   const fetchFeeds = async ({ pageParam }: { pageParam?: string }) => {
-    return tweetService.getUserTweets(username, 10, pageParam);
+    switch (activeTab) {
+      case 'replies':
+        return tweetService.getUserReplies(username, 10, pageParam);
+      case 'bookmarks':
+        return tweetService.getBookmarks(10, pageParam);
+      case 'media':
+        return tweetService.getUserMedia(username, 10, pageParam);
+      case 'likes':
+        return tweetService.getUserLikes(username, 10, pageParam);
+      case 'posts':
+      default:
+        return tweetService.getUserTweets(username, 10, pageParam);
+    }
   };
 
   const {
@@ -20,10 +32,10 @@ export function ProfileFeed({ username }: { username: string }) {
     isLoading,
     isError,
   } = useInfiniteQuery({
-    queryKey: ['tweets', 'user', username],
+    queryKey: ['tweets', 'user', username, activeTab],
     queryFn: fetchFeeds,
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage?.data?.next_cursor || undefined,
+    getNextPageParam: (lastPage) => lastPage?.result?.next_cursor || undefined,
   });
 
   useEffect(() => {
@@ -40,7 +52,7 @@ export function ProfileFeed({ username }: { username: string }) {
     return <div className="p-8 text-center text-red-500">Error loading tweets.</div>;
   }
 
-  const tweets = data?.pages.flatMap((page) => page.data?.tweets || []) || [];
+  const tweets = data?.pages.flatMap((page) => page.result?.tweets || []) || [];
 
   if (tweets.length === 0) {
     return (
