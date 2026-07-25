@@ -3,19 +3,13 @@ import { Search } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 
+import { SearchBar } from '@/features/search/components/search-bar';
+
 export function RightSidebar() {
   return (
     <aside className="w-[350px] shrink-0 hidden lg:flex flex-col p-4 sticky top-0 h-screen space-y-4">
       <div className="sticky top-0 bg-black pt-1 pb-2 z-10">
-        <div className="relative group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-500 group-focus-within:text-[#1d9bf0]" />
-          </div>
-          <Input 
-            placeholder="Search" 
-            className="pl-12 bg-[#202327] text-white border-transparent rounded-full h-12 focus-visible:ring-1 focus-visible:ring-[#1d9bf0] focus-visible:bg-black focus-visible:border-[#1d9bf0]" 
-          />
-        </div>
+        <SearchBar />
       </div>
 
       <div className="bg-[#16181c] rounded-2xl flex flex-col pt-3 pb-1 border border-[#16181c]">

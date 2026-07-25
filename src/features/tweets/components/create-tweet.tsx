@@ -1,148 +1,166 @@
 'use client';
-import { useState, useRef } from 'react';
-import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { Image as ImageIcon, Smile, MapPin, Calendar, CheckCircle2, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { mediaService } from '@/features/media/api/media.service';
+import { useState, useRef, useEffect } from 'react';
+import { Image as ImageIcon, Smile, FileText, MapPin, X } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { tweetService } from '@/features/tweets/api/tweet.service';
-import { toast } from 'sonner';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { useMediaUpload } from '@/features/media/hooks/useMediaUpload';
+import { MediaUploadButton } from '@/features/media/components/MediaUploadButton';
+import { MediaPreviewGrid } from '@/features/media/components/MediaPreviewGrid';
+
+const EMOJI_LIST = ['😀', '😂', '🥰', '😎', '😭', '😡', '👍', '🙏', '🔥', '✨', '🎉', '❤️'];
 
 export function CreateTweet() {
-  const user = useAuthStore((state) => state.user);
   const [content, setContent] = useState('');
-  const [images, setImages] = useState<File[]>([]);
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const user = useAuthStore((state) => state.user);
+  const queryClient = useQueryClient();
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const files = Array.from(e.target.files);
-      setImages((prev) => [...prev, ...files]);
-      
-      const newUrls = files.map(file => URL.createObjectURL(file));
-      setImageUrls((prev) => [...prev, ...newUrls]);
-    }
-  };
+  const { mediaItems, isUploading, handleSelectFiles, handleRemoveMedia, clearMedia } = useMediaUpload({ maxFiles: 4 });
 
-  const removeImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
-    setImageUrls((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!content.trim() && images.length === 0) return;
-    
-    setLoading(true);
-    try {
-      const uploadedMedias: string[] = [];
-      
-      // Upload images first
-      for (const file of images) {
-        const res = await mediaService.uploadImage(file);
-        if (res.result && res.result[0]) {
-          uploadedMedias.push(res.result[0]._id);
-        }
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
       }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-      // Create tweet
-      await tweetService.createTweet({
-        content,
-        audience: 0,
-        type: 0,
-        medias: uploadedMedias
-      });
-
-      toast.success("Đăng bài viết thành công!");
-      setContent('');
-      setImages([]);
-      setImageUrls([]);
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Đăng bài thất bại");
-    } finally {
-      setLoading(false);
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContent(e.target.value);
+    // Auto-resize textarea
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
   };
+
+  const handleEmojiClick = (emoji: string) => {
+    setContent((prev) => prev + emoji);
+    setShowEmojiPicker(false);
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  };
+
+  const handleSubmit = async () => {
+    // Only block if there's no text AND no media
+    const hasMedia = mediaItems.length > 0;
+    if ((!content.trim() && !hasMedia) || isSubmitting || isUploading) return;
+    
+    setIsSubmitting(true);
+    
+    // Extract hashtags from content
+    const hashtags = content.match(/#[a-zA-Z0-9_]+/g)?.map((h) => h.slice(1)) || [];
+    
+    // Get successfully uploaded media IDs
+    const uploadedMediaIds = mediaItems
+      .filter((m) => m.status === 'success' && m.backendId)
+      .map((m) => m.backendId as string);
+
+    try {
+      await tweetService.createTweet({
+        type: 0, 
+        audience: 0, 
+        content: content.trim(),
+        parent_id: null,
+        hashtags, 
+        mentions: [], 
+        medias: uploadedMediaIds
+      });
+      setContent('');
+      clearMedia();
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+      queryClient.invalidateQueries({ queryKey: ['tweets'] });
+    } catch (error) {
+      console.error('Failed to create tweet', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const isPostDisabled = (!content.trim() && mediaItems.length === 0) || isSubmitting || isUploading;
 
   return (
     <div className="border-b border-[#2F3336] p-4 flex gap-4">
-      <div className="w-10 h-10 bg-gray-600 rounded-full flex-shrink-0 overflow-hidden">
-        {user?.avatar ? <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" /> : null}
+      <div className="w-10 h-10 rounded-full bg-[#333639] overflow-hidden flex-shrink-0">
+        {user?.avatar ? (
+          <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-gray-600" />
+        )}
       </div>
       <div className="flex-1">
-        <form onSubmit={handleSubmit}>
-          <textarea 
-            placeholder="What is happening?!" 
-            className="w-full bg-transparent text-xl outline-none resize-none min-h-[50px] placeholder:text-gray-500 text-white"
-            value={content}
-            onChange={(e) => {
-              setContent(e.target.value);
-              e.target.style.height = 'auto';
-              e.target.style.height = e.target.scrollHeight + 'px';
-            }}
-            rows={1}
-          />
+        <textarea
+          ref={textareaRef}
+          value={content}
+          onChange={handleInput}
+          placeholder="What is happening?!"
+          className="w-full bg-transparent text-xl placeholder-gray-500 text-white outline-none resize-none min-h-[52px] py-2 overflow-hidden"
+          rows={1}
+        />
 
-          {/* Image Previews */}
-          {imageUrls.length > 0 && (
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              {imageUrls.map((url, index) => (
-                <div key={index} className="relative rounded-2xl overflow-hidden border border-[#2F3336]">
-                  <img src={url} alt="Preview" className="w-full h-auto object-cover max-h-[300px]" />
-                  <button 
-                    type="button"
-                    onClick={() => removeImage(index)}
-                    className="absolute top-2 right-2 w-8 h-8 bg-black/70 hover:bg-black/60 rounded-full flex items-center justify-center transition-colors"
-                  >
-                    <X className="w-5 h-5 text-white" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+        <MediaPreviewGrid mediaItems={mediaItems} onRemove={handleRemoveMedia} />
 
-          <div className="border-b border-[#2F3336] pb-3 mb-3">
-            <Button type="button" variant="ghost" className="h-6 px-3 rounded-full text-sm font-bold text-[#1d9bf0] hover:bg-[#1d9bf0]/10 p-0 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4" /> Everyone can reply
-            </Button>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1 text-[#1d9bf0]">
-              <div 
-                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#1d9bf0]/10 cursor-pointer transition-colors"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <ImageIcon className="w-5 h-5" />
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  accept="image/*" 
-                  multiple 
-                  className="hidden" 
-                  onChange={handleImageChange} 
-                />
-              </div>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#1d9bf0]/10 cursor-pointer transition-colors">
-                <Smile className="w-5 h-5" />
-              </div>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#1d9bf0]/10 cursor-pointer transition-colors">
-                <Calendar className="w-5 h-5" />
-              </div>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#1d9bf0]/10 cursor-pointer transition-colors opacity-50">
-                <MapPin className="w-5 h-5" />
-              </div>
-            </div>
-            <Button 
-              type="submit" 
-              disabled={loading || (!content.trim() && images.length === 0)} 
-              className="rounded-full font-bold bg-[#1d9bf0] text-white hover:bg-[#1a8cd8] disabled:opacity-50 px-5"
+        <div className="border-t border-[#2F3336] mt-3 pt-3 flex items-center justify-between relative">
+          <div className="flex items-center gap-1 text-[#1d9bf0]">
+            <MediaUploadButton 
+              onSelectFiles={handleSelectFiles} 
+              disabled={isUploading || isSubmitting}
+              className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-[#1d9bf0]/10 transition-colors"
             >
-              {loading ? "Posting..." : "Post"}
-            </Button>
+              <ImageIcon className="w-5 h-5" />
+            </MediaUploadButton>
+
+            <button className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-[#1d9bf0]/10 transition-colors">
+              <FileText className="w-5 h-5" />
+            </button>
+            
+            <div className="relative" ref={emojiPickerRef}>
+              <button 
+                type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-[#1d9bf0]/10 transition-colors"
+              >
+                <Smile className="w-5 h-5" />
+              </button>
+
+              {showEmojiPicker && (
+                <div className="absolute top-10 z-50 bg-black border border-[#2F3336] rounded-xl shadow-xl p-3 w-64 flex flex-wrap gap-2">
+                  {EMOJI_LIST.map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => handleEmojiClick(emoji)}
+                      className="text-2xl hover:bg-white/10 p-1.5 rounded-lg transition-colors"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-[#1d9bf0]/10 transition-colors opacity-50 cursor-not-allowed">
+              <MapPin className="w-5 h-5" />
+            </button>
           </div>
-        </form>
+          <button
+            onClick={handleSubmit}
+            disabled={isPostDisabled}
+            className="bg-[#1d9bf0] hover:bg-[#1a8cd8] text-white font-bold py-1.5 px-4 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isSubmitting ? 'Posting...' : 'Post'}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
+

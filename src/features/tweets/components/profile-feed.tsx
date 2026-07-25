@@ -3,16 +3,13 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { useInView } from 'react-intersection-observer';
 import { useEffect } from 'react';
 import { tweetService } from '@/features/tweets/api/tweet.service';
-import { TweetCard } from './tweet-card';
+import { TweetCard } from '@/features/tweets/components/tweet-card';
 
-export function HomeFeed({ type }: { type: 'for-you' | 'following' }) {
+export function ProfileFeed({ username }: { username: string }) {
   const { ref, inView } = useInView();
 
   const fetchFeeds = async ({ pageParam }: { pageParam?: string }) => {
-    if (type === 'for-you') {
-      return tweetService.getForYouFeeds(10, pageParam);
-    }
-    return tweetService.getNewFeeds(10, pageParam);
+    return tweetService.getUserTweets(username, 10, pageParam);
   };
 
   const {
@@ -23,7 +20,7 @@ export function HomeFeed({ type }: { type: 'for-you' | 'following' }) {
     isLoading,
     isError,
   } = useInfiniteQuery({
-    queryKey: ['tweets', 'newsfeed', type],
+    queryKey: ['tweets', 'user', username],
     queryFn: fetchFeeds,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage?.data?.next_cursor || undefined,
@@ -40,16 +37,16 @@ export function HomeFeed({ type }: { type: 'for-you' | 'following' }) {
   }
 
   if (isError) {
-    return <div className="p-8 text-center text-red-500">Error loading feeds.</div>;
+    return <div className="p-8 text-center text-red-500">Error loading tweets.</div>;
   }
 
   const tweets = data?.pages.flatMap((page) => page.data?.tweets || []) || [];
 
   if (tweets.length === 0) {
     return (
-      <div className="p-8 text-center text-gray-500">
-        <div className="font-bold text-2xl text-white mb-2">Welcome to X!</div>
-        <p>This is the best place to see what’s happening in your world. Find some people and topics to follow now.</p>
+      <div className="p-8 text-center flex flex-col items-center max-w-[400px] mx-auto mt-8">
+        <h2 className="text-3xl font-bold mb-2">Nothing to see here — yet</h2>
+        <p className="text-gray-500 mb-6">When they post tweets, they will show up here.</p>
       </div>
     );
   }

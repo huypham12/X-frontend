@@ -15,6 +15,7 @@ import { mediaService } from '@/features/media/api/media.service';
 import { userService } from '@/features/users/api/user.service';
 import { toast } from 'sonner';
 import Cookies from 'js-cookie';
+import { useMediaUpload } from '@/features/media/hooks/use-media-upload';
 
 export function EditProfileModal() {
   const user = useAuthStore((state) => state.user);
@@ -24,65 +25,70 @@ export function EditProfileModal() {
   const [loading, setLoading] = useState(false);
   
   const [name, setName] = useState(user?.name || '');
+  const [username, setUsername] = useState(user?.username || '');
   const [bio, setBio] = useState(user?.bio || '');
   
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar || '');
   const [coverUrl, setCoverUrl] = useState(user?.cover_photo || '');
   
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const { files: avatarFiles, previewUrls: avatarPreviews, addFiles: addAvatar, clearFiles: clearAvatar } = useMediaUpload({ multiple: false });
+  const { files: coverFiles, previewUrls: coverPreviews, addFiles: addCover, clearFiles: clearCover } = useMediaUpload({ multiple: false });
+
+  // Use the hook previews if they exist, otherwise fallback to existing URLs or user data
+  const finalAvatarUrl = avatarPreviews[0] || avatarUrl;
+  const finalCoverUrl = coverPreviews[0] || coverUrl;
 
   useEffect(() => {
     if (open) {
       setName(user?.name || '');
+      setUsername(user?.username || '');
       setBio(user?.bio || '');
       setAvatarUrl(user?.avatar || '');
       setCoverUrl(user?.cover_photo || '');
-      setAvatarFile(null);
-      setCoverFile(null);
+      clearAvatar();
+      clearCover();
     }
   }, [open, user]);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setAvatarFile(e.target.files[0]);
-      setAvatarUrl(URL.createObjectURL(e.target.files[0]));
+    if (e.target.files && e.target.files.length > 0) {
+      addAvatar(e.target.files);
     }
   };
 
   const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setCoverFile(e.target.files[0]);
-      setCoverUrl(URL.createObjectURL(e.target.files[0]));
+    if (e.target.files && e.target.files.length > 0) {
+      addCover(e.target.files);
     }
   };
 
   const handleSave = async () => {
     setLoading(true);
     try {
-      let finalAvatar = avatarUrl;
-      let finalCover = coverUrl;
+      let finalAvatarUpdate = finalAvatarUrl;
+      let finalCoverUpdate = finalCoverUrl;
 
       // Upload if new files selected
-      if (avatarFile) {
-        const res = await mediaService.uploadImage(avatarFile);
+      if (avatarFiles.length > 0) {
+        const res = await mediaService.uploadImage(avatarFiles[0]);
         if (res.data && res.data[0]) {
-          finalAvatar = res.data[0].url;
+          finalAvatarUpdate = res.data[0].url;
         }
       }
-      if (coverFile) {
-        const res = await mediaService.uploadImage(coverFile);
+      if (coverFiles.length > 0) {
+        const res = await mediaService.uploadImage(coverFiles[0]);
         if (res.data && res.data[0]) {
-          finalCover = res.data[0].url;
+          finalCoverUpdate = res.data[0].url;
         }
       }
 
       // Update profile
       const updateData = {
         name,
+        username,
         bio,
-        avatar: finalAvatar,
-        cover_photo: finalCover
+        avatar: finalAvatarUpdate,
+        cover_photo: finalCoverUpdate
       };
 
       const updateRes = await userService.updateProfile(updateData);
@@ -128,8 +134,8 @@ export function EditProfileModal() {
         <div className="overflow-y-auto overflow-x-hidden">
           {/* Cover Photo */}
           <div className="h-[200px] bg-[#333639] w-full relative flex items-center justify-center">
-            {coverUrl && (
-              <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
+            {finalCoverUrl && (
+              <img src={finalCoverUrl} alt="Cover" className="w-full h-full object-cover" />
             )}
             <div className="absolute flex gap-4">
               <label className="w-11 h-11 bg-black/50 hover:bg-black/40 rounded-full flex items-center justify-center cursor-pointer transition-colors backdrop-blur-sm">
@@ -142,8 +148,8 @@ export function EditProfileModal() {
           {/* Avatar Photo */}
           <div className="px-4 relative">
             <div className="w-[112px] h-[112px] rounded-full border-4 border-black bg-gray-600 -mt-[56px] relative overflow-hidden group">
-              {avatarUrl && (
-                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              {finalAvatarUrl && (
+                <img src={finalAvatarUrl} alt="Avatar" className="w-full h-full object-cover" />
               )}
               <div className="absolute inset-0 bg-black/50 hover:bg-black/40 flex items-center justify-center cursor-pointer transition-colors backdrop-blur-sm opacity-0 group-hover:opacity-100">
                 <label className="w-11 h-11 bg-black/40 hover:bg-black/30 rounded-full flex items-center justify-center cursor-pointer transition-colors">
@@ -161,6 +167,15 @@ export function EditProfileModal() {
               <Input 
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                className="pt-6 pb-2 h-14 bg-transparent border-[#2F3336] rounded-sm focus-visible:ring-1 focus-visible:ring-[#1d9bf0] focus-visible:border-[#1d9bf0] text-white"
+              />
+            </div>
+            
+            <div className="relative group">
+              <div className="absolute top-2 left-2 text-xs text-gray-500 group-focus-within:text-[#1d9bf0]">Username</div>
+              <Input 
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="pt-6 pb-2 h-14 bg-transparent border-[#2F3336] rounded-sm focus-visible:ring-1 focus-visible:ring-[#1d9bf0] focus-visible:border-[#1d9bf0] text-white"
               />
             </div>
