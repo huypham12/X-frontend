@@ -18,6 +18,7 @@ export const metadata: Metadata = {
 };
 
 import AppProvider from '@/providers/app-provider';
+import { SocketProvider } from '@/providers/socket-provider';
 
 export default function RootLayout({
   children,
@@ -32,7 +33,9 @@ export default function RootLayout({
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col font-sans">
         <AppProvider>
-          {children}
+          <SocketProvider>
+            {children}
+          </SocketProvider>
         </AppProvider>
       </body>
     </html>

@@ -10,8 +10,8 @@ export function RightSidebar() {
         <SearchBar />
       </div>
 
-      <WhoToFollow />
       <OnlineFriends />
+      <WhoToFollow />
     </aside>
   );
 }

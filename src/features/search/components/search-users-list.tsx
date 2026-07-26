@@ -1,13 +1,30 @@
 'use client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { searchService } from '@/features/search/api/search.service';
+import { userService } from '@/features/users/api/user.service';
 import Link from 'next/link';
 
 export function SearchUsersList({ query }: { query: string }) {
+  const queryClient = useQueryClient();
+
   const { data, isLoading } = useQuery({
     queryKey: ['search-users', query],
     queryFn: () => searchService.searchUsers(query),
     enabled: !!query,
+  });
+
+  const followMutation = useMutation({
+    mutationFn: (userId: string) => userService.followUser(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['search-users', query] });
+    }
+  });
+
+  const unfollowMutation = useMutation({
+    mutationFn: (userId: string) => userService.unfollowUser(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['search-users', query] });
+    }
   });
 
   const users = data?.users || [];
@@ -49,8 +66,19 @@ export function SearchUsersList({ query }: { query: string }) {
           </div>
           {/* Optional: Add a follow button here if not the current user */}
           <div className="shrink-0">
-            <button className="bg-white text-black font-bold px-4 py-1.5 rounded-full text-sm hover:bg-gray-200 transition-colors">
-              Follow
+            <button 
+              className={user.is_following ? "bg-black text-white border border-gray-600 font-bold px-4 py-1.5 rounded-full text-sm hover:border-red-500 hover:text-red-500 hover:bg-red-500/10 transition-colors" : "bg-white text-black font-bold px-4 py-1.5 rounded-full text-sm hover:bg-gray-200 transition-colors"}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (user.is_following) {
+                  unfollowMutation.mutate(user._id);
+                } else {
+                  followMutation.mutate(user._id);
+                }
+              }}
+            >
+              {user.is_following ? 'Following' : 'Follow'}
             </button>
           </div>
         </Link>
