@@ -1,19 +1,29 @@
 export type MediaType = 'image' | 'video' | 'audio';
-export type UploadStatus = 'uploading' | 'success' | 'error';
+export type MediaStatus = 'pending' | 'ready' | 'failed';
+export type MediaUploadStatus = 'uploading' | 'processing' | 'ready' | 'error';
+export type MediaErrorCode =
+  | 'upload_failed'
+  | 'processing_failed'
+  | 'processing_timeout';
 
 export interface MediaItem {
-  id: string; // Temporary ID for frontend state management
-  url: string; // Local Object URL for preview, or backend URL when success
+  id: string;
+  previewUrl: string;
+  remoteUrl?: string;
   type: MediaType;
-  status: UploadStatus;
-  progress: number; // 0 to 100
-  file?: File; // Reference to the original file
-  backendId?: string; // The media_id returned from backend
+  status: MediaUploadStatus;
+  progress: number;
+  file: File;
+  backendId?: string;
+  errorCode?: MediaErrorCode;
 }
 
-export interface MediaResponse {
-  statusCode: number;
-  message: string;
-  data?: any[];
-  result?: any[];
+export interface MediaMetadata {
+  _id: string;
+  url: string;
+  thumbnail?: string;
+  type: MediaType;
+  status: MediaStatus;
 }
+
+export type MediaResponse = MediaMetadata[];

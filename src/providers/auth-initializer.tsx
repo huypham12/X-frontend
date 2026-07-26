@@ -16,8 +16,8 @@ export function AuthInitializer() {
       if (token && !user) {
         try {
           const data = await userService.getMe();
-          if (data && data.user && data.user[0]) {
-            setAuth(data.user[0], token, Cookies.get('refresh_token') || '');
+          if (data && data[0]) {
+            setAuth(data[0], token, Cookies.get('refresh_token') || '');
           }
         } catch (error) {
           console.error("Failed to fetch user profile", error);

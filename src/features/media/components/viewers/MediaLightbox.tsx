@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { MediaPlayer } from './MediaPlayer';
+import type { MediaMetadata } from '../../types/media.type';
 
 interface MediaLightboxProps {
-  medias: any[];
+  medias: MediaMetadata[];
   initialIndex?: number;
   isOpen: boolean;
   onClose: () => void;
@@ -17,7 +18,6 @@ export function MediaLightbox({ medias, initialIndex = 0, isOpen, onClose }: Med
 
   useEffect(() => {
     if (isOpen) {
-      setCurrentIndex(initialIndex);
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'auto';

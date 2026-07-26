@@ -2,13 +2,15 @@
 
 import { AudioPlayer } from './AudioPlayer';
 import { VideoPlayer } from './VideoPlayer';
+import type { MediaMetadata } from '../../types/media.type';
 
 interface MediaPlayerProps {
-  media: any; // MediaMetadata
+  media: MediaMetadata;
   className?: string;
+  audioVariant?: 'default' | 'compact';
 }
 
-export function MediaPlayer({ media, className = '' }: MediaPlayerProps) {
+export function MediaPlayer({ media, className = '', audioVariant = 'default' }: MediaPlayerProps) {
   if (!media || !media.url) return null;
 
   // Cloudinary often sets resource_type as 'video' for audio as well, 
@@ -19,14 +21,14 @@ export function MediaPlayer({ media, className = '' }: MediaPlayerProps) {
   if (isAudio) {
     return (
       <div className={`w-full ${className}`}>
-        <AudioPlayer url={media.url} />
+        <AudioPlayer url={media.url} variant={audioVariant} />
       </div>
     );
   }
 
   if (isVideo) {
     return (
-      <div className={`w-full h-full ${className}`}>
+      <div className={`h-full w-full ${className}`} onClick={(event) => event.stopPropagation()}>
         <VideoPlayer url={media.url} poster={media.thumbnail} />
       </div>
     );

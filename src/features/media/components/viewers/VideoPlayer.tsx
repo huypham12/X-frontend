@@ -7,17 +7,19 @@ interface VideoPlayerProps {
 
 export function VideoPlayer({ url, poster }: VideoPlayerProps) {
   return (
-    <div 
-      className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden"
-      onClick={(e) => e.stopPropagation()} // Prevent triggering tweet click
+    <div
+      className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black"
+      onClick={(event) => event.stopPropagation()}
     >
-      <video 
+      <video
         src={url}
         poster={poster}
         controls
+        playsInline
         preload="metadata"
-        className="max-w-full max-h-full object-contain"
-        controlsList="nodownload" // Custom download handled elsewhere
+        aria-label="Tweet video"
+        className="h-full w-full object-contain"
+        onClick={(event) => event.stopPropagation()}
       />
     </div>
   );

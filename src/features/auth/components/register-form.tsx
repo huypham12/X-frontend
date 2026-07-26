@@ -15,7 +15,8 @@ const formSchema = z.object({
   name: z.string().min(2, 'Tên quá ngắn'),
   email: z.string().email('Email không hợp lệ'),
   password: z.string().min(6, 'Mật khẩu phải từ 6 ký tự'),
-  confirm_password: z.string()
+  confirm_password: z.string(),
+  date_of_birth: z.string().min(1, 'Vui lòng chọn ngày sinh')
 }).refine((data) => data.password === data.confirm_password, {
   message: "Mật khẩu xác nhận không khớp",
   path: ["confirm_password"],
@@ -30,7 +31,8 @@ export function RegisterForm() {
       name: '',
       email: '',
       password: '',
-      confirm_password: ''
+      confirm_password: '',
+      date_of_birth: ''
     },
   });
 
@@ -71,6 +73,11 @@ export function RegisterForm() {
         <div>
           <Input type="password" placeholder="Xác nhận mật khẩu" {...form.register('confirm_password')} className="bg-[#121212] border-gray-800 h-14 rounded-xl focus-visible:ring-1 focus-visible:ring-gray-700" />
           {form.formState.errors.confirm_password && <span className="text-red-500 text-sm mt-1 ml-1">{form.formState.errors.confirm_password.message}</span>}
+        </div>
+        <div>
+          <div className="text-gray-400 text-sm mb-1 ml-1 font-semibold">Ngày sinh</div>
+          <Input type="date" {...form.register('date_of_birth')} className="bg-[#121212] border-gray-800 h-14 rounded-xl focus-visible:ring-1 focus-visible:ring-gray-700 block w-full px-3" style={{ colorScheme: 'dark' }} />
+          {form.formState.errors.date_of_birth && <span className="text-red-500 text-sm mt-1 ml-1">{form.formState.errors.date_of_birth.message}</span>}
         </div>
         
         <Button type="submit" disabled={mutation.isPending} className="w-full rounded-full h-12 font-bold text-md bg-white text-black hover:bg-gray-200 transition-colors mt-4">

@@ -29,7 +29,7 @@ export function SearchBar() {
     }
   });
 
-  const history = historyData?.result || [];
+  const history = historyData || [];
 
   const handleSearch = (searchQuery: string) => {
     if (!searchQuery.trim()) return;

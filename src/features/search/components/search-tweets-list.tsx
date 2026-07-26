@@ -10,7 +10,7 @@ export function SearchTweetsList({ query }: { query: string }) {
     enabled: !!query,
   });
 
-  const tweets = data?.data?.tweets || [];
+  const tweets = data?.tweets || [];
 
   if (isLoading) {
     return <div className="text-center text-gray-500 py-8">Searching tweets...</div>;

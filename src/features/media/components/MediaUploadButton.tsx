@@ -47,7 +47,7 @@ export const MediaUploadButton = ({
         onClick={handleClick}
         disabled={disabled}
         className={className}
-        title="Media"
+        aria-label="Add photos, video, or audio"
       >
         {children || <ImageIcon className="w-5 h-5" />}
       </button>

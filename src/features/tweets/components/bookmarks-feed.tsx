@@ -22,7 +22,7 @@ export function BookmarksFeed() {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
-      return lastPage?.data?.has_next_page ? lastPage.data.next_cursor : undefined;
+      return lastPage?.has_next_page ? lastPage.next_cursor : undefined;
     },
   });
 
@@ -48,7 +48,7 @@ export function BookmarksFeed() {
     );
   }
 
-  const tweets = data?.pages.flatMap((page) => page.data?.tweets || []) || [];
+  const tweets = data?.pages.flatMap((page) => page?.tweets || []) || [];
 
   if (tweets.length === 0) {
     return (

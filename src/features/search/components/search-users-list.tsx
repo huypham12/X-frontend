@@ -10,7 +10,7 @@ export function SearchUsersList({ query }: { query: string }) {
     enabled: !!query,
   });
 
-  const users = data?.data?.users || [];
+  const users = data?.users || [];
 
   if (isLoading) {
     return <div className="text-center text-gray-500 py-8">Searching...</div>;

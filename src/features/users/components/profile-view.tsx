@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { EditProfileModal } from '@/features/users/components/edit-profile-modal';
 import { FollowListModal } from '@/features/users/components/follow-list-modal';
 import { ProfileFeed } from '@/features/tweets/components/profile-feed';
+import { BookmarksFeed } from '@/features/tweets/components/bookmarks-feed';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userService } from '@/features/users/api/user.service';
 
@@ -32,7 +33,7 @@ export function ProfileView({ username }: ProfileViewProps) {
     enabled: !isOwnProfile,
   });
 
-  const displayUser = isOwnProfile ? currentUser : profileResponse?.user?.[0];
+  const displayUser = isOwnProfile ? currentUser : profileResponse?.[0];
 
   const followMutation = useMutation({
     mutationFn: () => userService.followUser(displayUser?._id),
@@ -174,7 +175,11 @@ export function ProfileView({ username }: ProfileViewProps) {
 
       {/* Feed Content */}
       <div className="flex-1 min-h-[500px]">
-        {displayUser?.username && <ProfileFeed username={displayUser.username} activeTab={activeTab} />}
+        {displayUser?.username && activeTab === 'bookmarks' ? (
+          <BookmarksFeed />
+        ) : (
+          displayUser?.username && <ProfileFeed username={displayUser.username} activeTab={activeTab as any} />
+        )}
       </div>
 
       {isOwnProfile && followListType && (

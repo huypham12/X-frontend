@@ -32,12 +32,12 @@ apiClient.interceptors.response.use(
           throw new Error('No refresh token available');
         }
 
-        const res = await axios.post(`${API_URL}/auth/refresh-token`, { refreshToken });
+        const res = await axios.post(`${API_URL}/auth/refresh-token`, { refresh_token: refreshToken });
         
-        const { access_token, refresh_token } = res.data.result;
+        const { access_token, refresh_token: new_refresh_token } = res.data.data;
         
         Cookies.set('access_token', access_token, { expires: 1 });
-        Cookies.set('refresh_token', refresh_token, { expires: 30 });
+        Cookies.set('refresh_token', new_refresh_token, { expires: 30 });
         
         originalRequest.headers.Authorization = `Bearer ${access_token}`;
         return apiClient(originalRequest);

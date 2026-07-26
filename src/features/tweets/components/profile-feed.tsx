@@ -12,8 +12,6 @@ export function ProfileFeed({ username, activeTab = 'posts' }: { username: strin
     switch (activeTab) {
       case 'replies':
         return tweetService.getUserReplies(username, 10, pageParam);
-      case 'bookmarks':
-        return tweetService.getBookmarks(10, pageParam);
       case 'media':
         return tweetService.getUserMedia(username, 10, pageParam);
       case 'likes':
@@ -35,7 +33,7 @@ export function ProfileFeed({ username, activeTab = 'posts' }: { username: strin
     queryKey: ['tweets', 'user', username, activeTab],
     queryFn: fetchFeeds,
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage?.result?.next_cursor || undefined,
+    getNextPageParam: (lastPage) => lastPage?.next_cursor || undefined,
   });
 
   useEffect(() => {
@@ -52,7 +50,7 @@ export function ProfileFeed({ username, activeTab = 'posts' }: { username: strin
     return <div className="p-8 text-center text-red-500">Error loading tweets.</div>;
   }
 
-  const tweets = data?.pages.flatMap((page) => page.result?.tweets || []) || [];
+  const tweets = data?.pages.flatMap((page) => page?.tweets || []) || [];
 
   if (tweets.length === 0) {
     return (

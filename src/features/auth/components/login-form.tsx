@@ -33,7 +33,7 @@ export function LoginForm() {
     mutationFn: authService.login,
     onSuccess: (data) => {
       toast.success('Đăng nhập thành công');
-      const { access_token, refresh_token } = data.data;
+      const { access_token, refresh_token } = data;
       setAuth(null as any, access_token, refresh_token);
       router.push('/home');
     },

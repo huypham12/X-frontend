@@ -42,18 +42,23 @@ export const MediaGallery = ({ media, onMediaClick }: MediaGalleryProps) => {
         return (
           <div
             key={item._id || index}
-            className={`relative rounded-xl overflow-hidden bg-neutral-900 border border-neutral-800 cursor-pointer ${aspectClass}`}
+            className={`relative overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 ${
+              isVideo ? 'cursor-default' : 'cursor-zoom-in'
+            } ${aspectClass}`}
             onClick={(e) => {
               e.stopPropagation();
-              onMediaClick?.(index);
+              if (!isVideo) onMediaClick?.(index);
             }}
           >
             {isVideo ? (
               <video
                 src={item.url}
-                className="w-full h-full object-cover"
+                className="h-full w-full bg-black object-contain"
                 controls
-                onClick={(e) => e.stopPropagation()} // Let video handle its own clicks
+                playsInline
+                preload="metadata"
+                aria-label="Tweet video"
+                onClick={(e) => e.stopPropagation()}
               />
             ) : (
               <img

@@ -1,13 +1,14 @@
 'use client';
 import { useState } from 'react';
-import { MoreHorizontal, Trash2, Edit2, Users, UserX, UserPlus, UserMinus, Globe } from 'lucide-react';
+import { MoreHorizontal, Trash2, Edit2, Users, UserX, Globe } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { tweetService } from '@/features/tweets/api/tweet.service';
 import { userService } from '@/features/users/api/user.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import type { Tweet } from '../types/tweet.type';
 
 interface TweetMenuProps {
-  tweet: any;
+  tweet: Tweet;
 }
 
 export function TweetMenu({ tweet }: TweetMenuProps) {
@@ -49,7 +50,11 @@ export function TweetMenu({ tweet }: TweetMenuProps) {
   });
 
   const blockMutation = useMutation({
-    mutationFn: () => userService.blockUser(tweet.author?._id),
+    mutationFn: () => {
+      const authorId = tweet.author?._id;
+      if (!authorId) throw new Error('Tweet author is missing.');
+      return userService.blockUser(authorId);
+    },
     onSuccess: () => {
       setIsOpen(false);
       queryClient.invalidateQueries({ queryKey: ['tweets'] });

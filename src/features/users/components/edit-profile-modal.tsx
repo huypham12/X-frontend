@@ -71,14 +71,14 @@ export function EditProfileModal() {
       // Upload if new files selected
       if (avatarFiles.length > 0) {
         const res = await mediaService.uploadImage(avatarFiles[0]);
-        if (res.data && res.data[0]) {
-          finalAvatarUpdate = res.data[0].url;
+        if (res && res[0]) {
+          finalAvatarUpdate = res[0].url;
         }
       }
       if (coverFiles.length > 0) {
         const res = await mediaService.uploadImage(coverFiles[0]);
-        if (res.data && res.data[0]) {
-          finalCoverUpdate = res.data[0].url;
+        if (res && res[0]) {
+          finalCoverUpdate = res[0].url;
         }
       }
 
@@ -94,10 +94,10 @@ export function EditProfileModal() {
       const updateRes = await userService.updateProfile(updateData);
       
       // Update store
-      if (updateRes.user && updateRes.user[0]) {
+      if (updateRes && updateRes[0]) {
         const accessToken = Cookies.get('access_token') || '';
         const refreshToken = Cookies.get('refresh_token') || '';
-        setAuth(updateRes.user[0], accessToken, refreshToken);
+        setAuth(updateRes[0], accessToken, refreshToken);
       }
 
       toast.success("Hồ sơ đã được cập nhật thành công!");
@@ -114,7 +114,7 @@ export function EditProfileModal() {
       <DialogTrigger className="rounded-full font-bold border border-gray-600 bg-transparent text-white hover:bg-white/10 h-9 px-4 text-sm">
         Edit profile
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] bg-black border-[#2F3336] text-white p-0 gap-0 h-[90vh] sm:h-auto overflow-hidden flex flex-col">
+      <DialogContent className="sm:max-w-[600px] bg-black border-[#2F3336] text-white p-0 gap-0 w-full h-[100dvh] sm:h-auto max-h-[100dvh] sm:max-h-[85vh] overflow-hidden flex flex-col rounded-none sm:rounded-2xl">
         <DialogHeader className="px-4 py-3 flex-row justify-between items-center border-b border-[#2F3336] sticky top-0 bg-black/80 backdrop-blur-md z-10">
           <div className="flex items-center gap-6">
             <Button variant="ghost" size="icon" onClick={() => setOpen(false)} className="rounded-full hover:bg-white/10 mt-1">
@@ -131,7 +131,7 @@ export function EditProfileModal() {
           </Button>
         </DialogHeader>
 
-        <div className="overflow-y-auto overflow-x-hidden">
+        <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0">
           {/* Cover Photo */}
           <div className="h-[200px] bg-[#333639] w-full relative flex items-center justify-center">
             {finalCoverUrl && (

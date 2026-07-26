@@ -1,39 +1,36 @@
 'use client';
 
 import { useState } from 'react';
-import { MediaPlayer } from './MediaPlayer';
+import type { MediaMetadata } from '../../types/media.type';
 import { MediaLightbox } from './MediaLightbox';
-import { Play } from 'lucide-react';
+import { MediaPlayer } from './MediaPlayer';
 
 interface MediaGalleryProps {
-  medias: any[];
+  medias: MediaMetadata[];
 }
 
 export function MediaGallery({ medias }: MediaGalleryProps) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [initialIndex, setInitialIndex] = useState(0);
 
-  if (!medias || medias.length === 0) return null;
+  if (medias.length === 0) return null;
 
-  const handleMediaClick = (e: React.MouseEvent, index: number) => {
-    e.stopPropagation();
-    
-    // Only open lightbox for images. Videos and audios play inline natively unless we want them in lightbox.
-    // For Twitter clone, images open in lightbox, videos play inline. We can open lightbox for both if we want.
-    // Let's open lightbox for everything except Audio.
-    const media = medias[index];
-    if (media.type === 'audio') return; 
+  const imageMedias = medias.filter((media) => media.type === 'image');
+  const allAudio = medias.every((media) => media.type === 'audio');
 
-    setInitialIndex(index);
+  const handleMediaClick = (event: React.MouseEvent, media: MediaMetadata) => {
+    event.stopPropagation();
+    if (media.type !== 'image') return;
+
+    const imageIndex = imageMedias.findIndex((imageMedia) => imageMedia._id === media._id);
+    if (imageIndex < 0) return;
+    setInitialIndex(imageIndex);
     setLightboxOpen(true);
   };
 
-  // If all are audio, we just list them vertically
-  const allAudio = medias.every(m => m.type === 'audio' || (m.url && m.url.match(/\.(mp3|wav|ogg|m4a)$/i)));
-  
   if (allAudio) {
     return (
-      <div className="mt-3 flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
+      <div className="mt-3 flex flex-col gap-2" onClick={(event) => event.stopPropagation()}>
         {medias.map((media) => (
           <MediaPlayer key={media._id} media={media} />
         ))}
@@ -41,48 +38,49 @@ export function MediaGallery({ medias }: MediaGalleryProps) {
     );
   }
 
-  // Normal Grid layout for Images and Videos
   return (
     <>
-      <div 
-        className={`mt-3 grid gap-0.5 rounded-2xl overflow-hidden border border-[#2F3336] ${
-          medias.length === 1 ? 'grid-cols-1' :
-          medias.length === 2 ? 'grid-cols-2 aspect-[8/4.5]' :
-          medias.length === 3 ? 'grid-cols-2 aspect-[8/4.5]' : 'grid-cols-2 aspect-square'
+      <div
+        className={`mt-3 grid gap-0.5 overflow-hidden rounded-2xl border border-[#2F3336] ${
+          medias.length === 1
+            ? 'aspect-video grid-cols-1'
+            : medias.length === 2 || medias.length === 3
+              ? 'aspect-[8/4.5] grid-cols-2'
+              : 'aspect-square grid-cols-2'
         }`}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
         {medias.map((media, index) => {
-          const isVideo = media.type === 'video' || (media.url && media.url.match(/\.(mp4|webm|mov)$/i));
+          const isImage = media.type === 'image';
 
           return (
-            <div 
-              key={media._id} 
-              className={`relative w-full h-full bg-[#333639] cursor-pointer hover:opacity-90 transition-opacity ${
-                medias.length === 3 && index === 0 ? 'row-span-2' : ''
-              }`}
-              onClick={(e) => handleMediaClick(e, index)}
+            <div
+              key={media._id}
+              className={`relative h-full w-full bg-[#333639] transition-opacity ${
+                isImage ? 'cursor-zoom-in hover:opacity-90' : 'cursor-default'
+              } ${medias.length === 3 && index === 0 ? 'row-span-2' : ''}`}
+              onClick={(event) => handleMediaClick(event, media)}
             >
-              <MediaPlayer media={media} className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
-              
-              {/* Play icon overlay for videos in the grid (if we disable native controls in grid) */}
-              {isVideo && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
-                  <div className="w-12 h-12 rounded-full bg-[#1d9bf0] flex items-center justify-center text-white">
-                    <Play className="w-6 h-6 fill-current ml-1" />
-                  </div>
-                </div>
-              )}
+              <MediaPlayer
+                media={media}
+                audioVariant="compact"
+                className={
+                  isImage
+                    ? 'pointer-events-none absolute inset-0 h-full w-full object-cover'
+                    : 'absolute inset-0 h-full w-full'
+                }
+              />
             </div>
           );
         })}
       </div>
 
-      <MediaLightbox 
-        medias={medias} 
-        isOpen={lightboxOpen} 
+      <MediaLightbox
+        key={`${lightboxOpen}-${initialIndex}`}
+        medias={imageMedias}
+        isOpen={lightboxOpen}
         initialIndex={initialIndex}
-        onClose={() => setLightboxOpen(false)} 
+        onClose={() => setLightboxOpen(false)}
       />
     </>
   );

@@ -26,7 +26,7 @@ export function HomeFeed({ type }: { type: 'for-you' | 'following' }) {
     queryKey: ['tweets', 'newsfeed', type],
     queryFn: fetchFeeds,
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage?.data?.next_cursor || undefined,
+    getNextPageParam: (lastPage) => lastPage?.next_cursor || undefined,
   });
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export function HomeFeed({ type }: { type: 'for-you' | 'following' }) {
     return <div className="p-8 text-center text-red-500">Error loading feeds.</div>;
   }
 
-  const tweets = data?.pages.flatMap((page) => page.data?.tweets || []) || [];
+  const tweets = data?.pages.flatMap((page) => page?.tweets || []) || [];
 
   if (tweets.length === 0) {
     return (

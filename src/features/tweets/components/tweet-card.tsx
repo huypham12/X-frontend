@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { MessageCircle, Repeat2, Heart, BarChart2, Share, MoreHorizontal, Bookmark, FileText } from 'lucide-react';
+import { MessageCircle, Repeat2, Heart, BarChart2, Share, Bookmark, FileText } from 'lucide-react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { useMutation } from '@tanstack/react-query';
 import { tweetService } from '@/features/tweets/api/tweet.service';
@@ -11,9 +11,29 @@ import { useRouter } from 'next/navigation';
 import { MediaGallery } from '@/features/media/components/viewers/MediaGallery';
 import { TweetMenu } from './tweet-menu';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { useQueryClient } from '@tanstack/react-query';
+import type { Tweet, TweetPage } from '../types/tweet.type';
 
-export function TweetCard({ tweet }: { tweet: any }) {
+type TweetCache = {
+  pages?: Array<Partial<TweetPage>>;
+};
+
+interface TweetCardProps {
+  tweet: Tweet;
+  variant?: 'feed' | 'thread-root' | 'thread-reply';
+}
+
+export function TweetCard({ tweet, variant = 'feed' }: TweetCardProps) {
+  const displayTweetId = tweet.type === 1 && tweet.parent_tweet
+    ? tweet.parent_tweet._id
+    : tweet._id;
+
+  return <TweetCardContent key={displayTweetId} tweet={tweet} variant={variant} />;
+}
+
+function TweetCardContent({ tweet, variant }: Required<TweetCardProps>) {
   const currentUser = useAuthStore(state => state.user);
+  const queryClient = useQueryClient();
   const router = useRouter();
   const isRetweet = tweet.type === 1;
   const isQuoteTweet = tweet.type === 3;
@@ -25,34 +45,86 @@ export function TweetCard({ tweet }: { tweet: any }) {
   const [bookmarkCount, setBookmarkCount] = useState(displayTweet.bookmark_count || 0);
   const [retweetCount, setRetweetCount] = useState(displayTweet.retweet_count || 0);
   const [isRetweeted, setIsRetweeted] = useState(displayTweet.is_retweeted || false);
-  
+
   const [isReplyModalOpen, setIsReplyModalOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [showRetweetMenu, setShowRetweetMenu] = useState(false);
+  type ToggleLikeVariables = { shouldLike: boolean };
+  type ToggleBookmarkVariables = { shouldBookmark: boolean };
+
+  // Helper to update a tweet across all cached React Query data (avoids full refetch)
+  const updateTweetInCache = (tweetId: string, updater: (tweet: Tweet) => Tweet) => {
+    queryClient.setQueriesData<TweetCache>(
+      { queryKey: ['tweets'] },
+      (oldData) => {
+        if (!oldData?.pages) return oldData;
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page) => {
+            if (!page?.tweets) return page;
+            return {
+              ...page,
+              tweets: page.tweets.map((t) => {
+                if (t._id === tweetId) return updater(t);
+                if (t.parent_tweet?._id === tweetId) {
+                  return { ...t, parent_tweet: updater(t.parent_tweet) };
+                }
+                return t;
+              })
+            };
+          })
+        };
+      }
+    );
+  };
 
   const likeMutation = useMutation({
-    mutationFn: () => isLiked ? tweetService.unlikeTweet(displayTweet._id) : tweetService.likeTweet(displayTweet._id),
-    onMutate: () => {
-      setIsLiked(!isLiked);
-      setLikeCount((prev: number) => isLiked ? prev - 1 : prev + 1);
+    mutationFn: ({ shouldLike }: ToggleLikeVariables) => shouldLike
+      ? tweetService.likeTweet(displayTweet._id)
+      : tweetService.unlikeTweet(displayTweet._id),
+    onMutate: ({ shouldLike }) => {
+      setIsLiked(shouldLike);
+      setLikeCount((prev: number) => shouldLike ? prev + 1 : prev - 1);
+      updateTweetInCache(displayTweet._id, (t) => ({
+        ...t,
+        is_liked: shouldLike,
+        like_count: Math.max(0, (t.like_count || 0) + (shouldLike ? 1 : -1))
+      }));
     },
-    onError: () => {
-      // Revert on error
-      setIsLiked(!isLiked);
-      setLikeCount((prev: number) => isLiked ? prev - 1 : prev + 1);
+    onError: (_error, variables) => {
+      const shouldLike = !variables?.shouldLike;
+      setIsLiked(shouldLike);
+      setLikeCount((prev: number) => shouldLike ? prev + 1 : prev - 1);
+      updateTweetInCache(displayTweet._id, (t) => ({
+        ...t,
+        is_liked: shouldLike,
+        like_count: Math.max(0, (t.like_count || 0) + (shouldLike ? 1 : -1))
+      }));
     }
   });
 
   const bookmarkMutation = useMutation({
-    mutationFn: () => isBookmarked ? tweetService.unbookmarkTweet(displayTweet._id) : tweetService.bookmarkTweet(displayTweet._id),
-    onMutate: () => {
-      setIsBookmarked(!isBookmarked);
-      setBookmarkCount((prev: number) => isBookmarked ? prev - 1 : prev + 1);
+    mutationFn: ({ shouldBookmark }: ToggleBookmarkVariables) => shouldBookmark
+      ? tweetService.bookmarkTweet(displayTweet._id)
+      : tweetService.unbookmarkTweet(displayTweet._id),
+    onMutate: ({ shouldBookmark }) => {
+      setIsBookmarked(shouldBookmark);
+      setBookmarkCount((prev: number) => shouldBookmark ? prev + 1 : prev - 1);
+      updateTweetInCache(displayTweet._id, (t) => ({
+        ...t,
+        is_bookmarked: shouldBookmark,
+        bookmark_count: Math.max(0, (t.bookmark_count || 0) + (shouldBookmark ? 1 : -1))
+      }));
     },
-    onError: () => {
-      // Revert on error
-      setIsBookmarked(!isBookmarked);
-      setBookmarkCount((prev: number) => isBookmarked ? prev - 1 : prev + 1);
+    onError: (_error, variables) => {
+      const shouldBookmark = !variables?.shouldBookmark;
+      setIsBookmarked(shouldBookmark);
+      setBookmarkCount((prev: number) => shouldBookmark ? prev + 1 : prev - 1);
+      updateTweetInCache(displayTweet._id, (t) => ({
+        ...t,
+        is_bookmarked: shouldBookmark,
+        bookmark_count: Math.max(0, (t.bookmark_count || 0) + (shouldBookmark ? 1 : -1))
+      }));
     }
   });
 
@@ -70,6 +142,7 @@ export function TweetCard({ tweet }: { tweet: any }) {
       setIsRetweeted(true);
       setRetweetCount((prev: number) => prev + 1);
       setShowRetweetMenu(false);
+      queryClient.invalidateQueries({ queryKey: ['tweets'] });
     }
   });
 
@@ -80,20 +153,20 @@ export function TweetCard({ tweet }: { tweet: any }) {
       timeAgo = formatDistanceToNowStrict(new Date(displayTweet.created_at));
       timeAgo = timeAgo.replace(' seconds', 's').replace(' minutes', 'm').replace(' hours', 'h').replace(' days', 'd');
     }
-  } catch (e) {
+  } catch {
     timeAgo = '';
   }
 
   const handleLike = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    likeMutation.mutate();
+    likeMutation.mutate({ shouldLike: !isLiked });
   };
 
   const handleBookmark = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    bookmarkMutation.mutate();
+    bookmarkMutation.mutate({ shouldBookmark: !isBookmarked });
   };
 
   const handleRetweetClick = (e: React.MouseEvent) => {
@@ -108,6 +181,7 @@ export function TweetCard({ tweet }: { tweet: any }) {
       setIsRetweeted(false);
       setRetweetCount((prev: number) => Math.max(0, prev - 1));
       setShowRetweetMenu(false);
+      queryClient.invalidateQueries({ queryKey: ['tweets'] });
     }
   });
 
@@ -132,8 +206,16 @@ export function TweetCard({ tweet }: { tweet: any }) {
     router.push(`/tweet/${displayTweet._id}`);
   };
 
+  const cardClass = variant === 'feed'
+    ? 'border-b border-[#2F3336] hover:bg-white/5'
+    : 'hover:bg-white/[0.03]';
+
   return (
-    <div onClick={handleCardClick} className="border-b border-[#2F3336] hover:bg-white/5 transition-colors cursor-pointer outline-none flex flex-col">
+    <>
+    <article
+      onClick={handleCardClick}
+      className={`${cardClass} flex cursor-pointer flex-col outline-none transition-colors`}
+    >
       {isRetweet && tweet.parent_tweet && (
         <div className="flex items-center gap-2 text-gray-500 text-[13px] font-bold pt-3 px-4 ml-10">
           <Repeat2 className="w-4 h-4" />
@@ -165,7 +247,7 @@ export function TweetCard({ tweet }: { tweet: any }) {
         </div>
         
         <div className="mt-1 text-[15px] whitespace-pre-wrap break-words leading-relaxed">
-          {displayTweet.content.split(/(#[a-zA-Z0-9_]+)/g).map((part: string, i: number) => {
+          {(displayTweet.content ?? '').split(/(#[a-zA-Z0-9_]+)/g).map((part: string, i: number) => {
             if (part.startsWith('#')) {
               // Extract the word without '#' for the search query
               const tag = part.slice(1);
@@ -184,12 +266,12 @@ export function TweetCard({ tweet }: { tweet: any }) {
           })}
         </div>
         
-                <MediaGallery medias={displayTweet.medias_info} />
+                <MediaGallery medias={displayTweet.medias_info ?? []} />
         
         {isQuoteTweet && displayTweet.parent_tweet && (
           <div 
             className="mt-3 border border-[#2F3336] rounded-xl p-3 hover:bg-white/5 transition-colors"
-            onClick={(e) => { e.stopPropagation(); router.push(`/tweet/${displayTweet.parent_tweet._id}`); }}
+            onClick={(e) => { e.stopPropagation(); router.push(`/tweet/${displayTweet.parent_tweet!._id}`); }}
           >
             <div className="flex items-center gap-2 mb-1">
               <div className="w-5 h-5 bg-[#333639] rounded-full overflow-hidden">
@@ -278,19 +360,21 @@ export function TweetCard({ tweet }: { tweet: any }) {
           </div>
         </div>
       </div>
-
-      <ReplyModal 
-        tweet={displayTweet} 
-        isOpen={isReplyModalOpen} 
-        onClose={() => setIsReplyModalOpen(false)} 
-      />
       
       </div>
-      <QuoteModal
-        tweet={displayTweet}
-        isOpen={isQuoteModalOpen}
-        onClose={() => setIsQuoteModalOpen(false)}
-      />
-    </div>
+    </article>
+
+    <ReplyModal
+      tweet={displayTweet}
+      isOpen={isReplyModalOpen}
+      onClose={() => setIsReplyModalOpen(false)}
+    />
+
+    <QuoteModal
+      tweet={displayTweet}
+      isOpen={isQuoteModalOpen}
+      onClose={() => setIsQuoteModalOpen(false)}
+    />
+    </>
   );
 }

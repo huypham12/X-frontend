@@ -1,95 +1,119 @@
-import { X } from 'lucide-react';
-import { MediaItem } from '../types/media.type';
-import Image from 'next/image';
+import { LoaderCircle, RotateCcw, X } from 'lucide-react';
+import type { MediaErrorCode, MediaItem } from '../types/media.type';
+import { AudioPlayer } from './viewers/AudioPlayer';
 
 interface MediaPreviewGridProps {
   mediaItems: MediaItem[];
   onRemove: (id: string) => void;
+  onRetry: (id: string) => void;
+  onContinueProcessing: (id: string) => void;
 }
 
-export const MediaPreviewGrid = ({ mediaItems, onRemove }: MediaPreviewGridProps) => {
-  if (!mediaItems || mediaItems.length === 0) return null;
+const getErrorMessage = (errorCode?: MediaErrorCode) => {
+  if (errorCode === 'processing_failed') return 'Video processing failed.';
+  if (errorCode === 'processing_timeout') return 'Video is taking longer than expected.';
+  return 'Upload failed.';
+};
 
-  // Grid layout logic similar to Twitter (1 file = full width, 2 files = split, etc.)
-  const gridClass = () => {
-    switch (mediaItems.length) {
-      case 1:
-        return 'grid-cols-1';
-      case 2:
-        return 'grid-cols-2';
-      case 3:
-      case 4:
-        return 'grid-cols-2';
-      default:
-        return 'grid-cols-2';
-    }
-  };
+export const MediaPreviewGrid = ({
+  mediaItems,
+  onRemove,
+  onRetry,
+  onContinueProcessing,
+}: MediaPreviewGridProps) => {
+  if (mediaItems.length === 0) return null;
 
   return (
-    <div className={`grid gap-2 mt-3 ${gridClass()}`}>
-      {mediaItems.map((item, index) => {
-        const isUploading = item.status === 'uploading';
-        const isError = item.status === 'error';
-
-        // Adjust aspect ratio based on count
-        const aspectClass =
-          mediaItems.length === 1 ? 'aspect-video' : 'aspect-square';
+    <div className={`mt-3 grid gap-2 ${mediaItems.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+      {mediaItems.map((item) => {
+        const aspectClass = mediaItems.length === 1 ? 'aspect-video' : 'aspect-square';
+        const isBusy = item.status === 'uploading' || item.status === 'processing';
 
         return (
           <div
             key={item.id}
-            className={`relative rounded-xl overflow-hidden bg-neutral-900 border border-neutral-800 ${aspectClass}`}
+            className={`relative overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 ${aspectClass}`}
           >
-            {/* Remove Button */}
             <button
-              onClick={() => onRemove(item.id)}
-              className="absolute top-2 right-2 z-10 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white backdrop-blur-sm transition-colors"
+              type="button"
+              aria-label="Remove media"
+              onClick={(event) => {
+                event.stopPropagation();
+                onRemove(item.id);
+              }}
+              className="absolute right-2 top-2 z-30 rounded-full bg-black/60 p-1.5 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
             >
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" />
             </button>
 
-            {/* Media Content */}
             {item.type === 'image' ? (
               <img
-                src={item.url}
+                src={item.previewUrl}
                 alt="Upload preview"
-                className="w-full h-full object-cover"
+                className="h-full w-full object-cover"
               />
             ) : item.type === 'video' ? (
               <video
-                src={item.url}
-                className="w-full h-full object-cover"
-                muted
-                autoPlay
-                loop
+                src={item.previewUrl}
+                className="h-full w-full bg-black object-contain"
+                controls={item.status === 'ready'}
+                muted={item.status !== 'ready'}
+                playsInline
+                preload="metadata"
+                aria-label="Video preview"
+                onClick={(event) => event.stopPropagation()}
               />
             ) : (
-              <div className="flex items-center justify-center h-full w-full bg-neutral-800 text-neutral-400">
-                Audio File
-              </div>
+              <AudioPlayer
+                url={item.previewUrl}
+                variant="compact"
+                disabled={isBusy || item.status === 'error'}
+              />
             )}
 
-            {/* Uploading Overlay */}
-            {isUploading && (
-              <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center p-4">
-                <div className="w-full max-w-[80%] bg-neutral-700 h-1.5 rounded-full overflow-hidden">
+            {item.status === 'uploading' && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/65 p-4">
+                <div className="h-1.5 w-full max-w-[80%] overflow-hidden rounded-full bg-neutral-700">
                   <div
-                    className="bg-blue-500 h-full transition-all duration-300"
+                    className="h-full bg-[#1d9bf0] transition-all duration-300"
                     style={{ width: `${item.progress}%` }}
                   />
                 </div>
-                <span className="text-white text-xs mt-2 font-medium">
-                  {item.progress}%
+                <span className="mt-2 text-center text-xs font-medium text-white">
+                  Uploading {item.type}… {item.progress}%
                 </span>
               </div>
             )}
 
-            {/* Error Overlay */}
-            {isError && (
-              <div className="absolute inset-0 bg-red-900/50 flex items-center justify-center p-4">
-                <span className="text-white text-xs font-medium text-center">
-                  Upload failed
+            {item.status === 'processing' && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/65 p-4">
+                <LoaderCircle className="h-7 w-7 animate-spin text-[#1d9bf0]" />
+                <span className="mt-2 text-center text-xs font-medium text-white">
+                  Processing video…
                 </span>
+              </div>
+            )}
+
+            {item.status === 'error' && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-red-950/80 p-4">
+                <span className="text-center text-xs font-medium text-white">
+                  {getErrorMessage(item.errorCode)}
+                </span>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (item.errorCode === 'processing_timeout') {
+                      onContinueProcessing(item.id);
+                    } else {
+                      onRetry(item.id);
+                    }
+                  }}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-black hover:bg-gray-200"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  {item.errorCode === 'processing_timeout' ? 'Check again' : 'Retry'}
+                </button>
               </div>
             )}
           </div>
