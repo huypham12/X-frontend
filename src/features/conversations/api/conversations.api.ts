@@ -10,6 +10,8 @@ import type {
   MessageContextOptions,
   MessageSearchPage,
 } from '../types/message-search.type';
+import type { ConversationMediaPage } from '../types/conversation-media.type';
+import type { CreateGroupPayload, CreatedGroupConversation } from '../types/create-group.type';
 
 export const conversationsApi = {
   getConversations: async (): Promise<Conversation[]> => {
@@ -61,12 +63,28 @@ export const conversationsApi = {
     return response.data.data;
   },
 
+  getConversationMedia: async (
+    conversationId: string,
+    limit: number = 20,
+    cursor?: string,
+  ): Promise<ConversationMediaPage> => {
+    const response = await apiClient.get(`/conversations/${conversationId}/media`, {
+      params: {
+        limit,
+        ...(cursor ? { cursor } : {}),
+      },
+    });
+    return response.data.data;
+  },
+
   getOrCreateDirectConversation: async (userId: string): Promise<Conversation> => {
     const response = await apiClient.post(`/conversations/direct/${userId}`);
     return response.data.data;
   },
 
-  createGroupConversation: async (data: { name: string; members: string[]; avatar_url?: string }): Promise<Conversation> => {
+  createGroupConversation: async (
+    data: CreateGroupPayload,
+  ): Promise<CreatedGroupConversation> => {
     const response = await apiClient.post('/conversations/group', data);
     return response.data.data;
   },

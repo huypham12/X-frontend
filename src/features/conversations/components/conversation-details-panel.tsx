@@ -7,6 +7,7 @@ import { useConversationDetailsStore } from '../stores/conversation-details.stor
 import { useConversations } from '../hooks/use-conversations';
 import { ConversationDetailsOverview } from './conversation-details-overview';
 import { ConversationSearchView } from './conversation-search-view';
+import { ConversationMediaView } from './conversation-media-view';
 
 interface ConversationDetailsPanelProps {
   conversationId: string;
@@ -15,10 +16,13 @@ interface ConversationDetailsPanelProps {
 }
 
 const ConversationDetailsSkeleton = () => (
-  <div className="animate-pulse px-6 py-8" aria-label="Loading conversation details">
-    <div className="mx-auto h-24 w-24 rounded-full bg-[#181818]" />
-    <div className="mx-auto mt-5 h-5 w-36 rounded bg-[#181818]" />
-    <div className="mx-auto mt-3 h-4 w-24 rounded bg-[#181818]" />
+  <div className="flex animate-pulse items-center gap-4 px-5 py-5" aria-label="Loading conversation details">
+    <div className="h-16 w-16 shrink-0 rounded-full bg-[#181818]" />
+    <div className="min-w-0 flex-1 space-y-2">
+      <div className="h-5 w-36 max-w-full rounded bg-[#181818]" />
+      <div className="h-4 w-24 max-w-full rounded bg-[#181818]" />
+      <div className="h-7 w-20 rounded-full bg-[#181818]" />
+    </div>
   </div>
 );
 
@@ -33,6 +37,8 @@ export const ConversationDetailsPanel = ({
   const openView = useConversationDetailsStore((state) => state.openView);
   const { isOnlineFriend } = useFriendPresence();
   const conversation = conversations?.find((item) => item._id === conversationId);
+  const panelTitle =
+    view === 'search' ? 'Search messages' : view === 'media' ? 'Shared media' : 'Conversation details';
 
   return (
     <section
@@ -58,7 +64,7 @@ export const ConversationDetailsPanel = ({
             tabIndex={headingRef ? -1 : undefined}
             className="truncate text-xl font-bold outline-none"
           >
-            {view === 'search' ? 'Search messages' : 'Conversation details'}
+            {panelTitle}
           </h2>
         </div>
         <button
@@ -90,6 +96,8 @@ export const ConversationDetailsPanel = ({
           </div>
         ) : conversation && view === 'search' ? (
           <ConversationSearchView conversation={conversation} />
+        ) : conversation && view === 'media' ? (
+          <ConversationMediaView conversationId={conversation._id} />
         ) : conversation ? (
           <ConversationDetailsOverview
             conversation={conversation}

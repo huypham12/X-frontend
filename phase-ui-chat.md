@@ -388,6 +388,8 @@ data: {
 
 ## Phase 10 — Shared media: ảnh, video và audio
 
+**Trạng thái: Đã hoàn thành.**
+
 **Một chức năng:** xem media đã gửi theo tab.
 
 **File tạo mới:**
@@ -413,6 +415,8 @@ data: {
 **Gate hoàn thành:** ảnh mở lightbox, video/audio điều khiển được bằng keyboard, pagination không duplicate, network không có N+1.
 
 ## Phase 11 — Tạo group với người đang chat trực tiếp
+
+**Trạng thái: Đã hoàn thành.**
 
 **Một chức năng:** tạo group mới, partner hiện tại được chọn sẵn.
 

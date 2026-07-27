@@ -32,7 +32,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           <div
             className={`px-4 py-3 rounded-2xl text-[15px] leading-tight break-words ${
               isMine
-                ? 'bg-twitter-blue text-white rounded-br-sm'
+                ? 'bg-[#1d9bf0] text-white rounded-br-sm'
                 : 'bg-[#2f3336] text-white rounded-bl-sm'
             }`}
           >
