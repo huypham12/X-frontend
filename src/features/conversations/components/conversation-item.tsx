@@ -1,10 +1,11 @@
 'use client';
 
 import React from 'react';
-import { Conversation } from '../types';
+import type { Conversation } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { FriendPresenceDot } from '@/features/users/components/friend-presence-dot';
+import { Pin } from 'lucide-react';
 
 interface ConversationItemProps {
   conversation: Conversation;
@@ -81,9 +82,11 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       </div>
       
       {conversation.is_pinned && (
-        <div className="flex-shrink-0">
-          <span className="text-gray-500 text-xs">📌</span>
-        </div>
+        <Pin
+          role="img"
+          aria-label="Pinned conversation"
+          className="h-3.5 w-3.5 flex-shrink-0 text-gray-500"
+        />
       )}
     </div>
   );

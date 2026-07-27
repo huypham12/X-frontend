@@ -1,5 +1,10 @@
 import { apiClient } from '@/services/api.client';
-import { Conversation, Message, PaginationResponse } from '../types';
+import type { Conversation, Message, PaginationResponse } from '../types';
+import type {
+  ConversationActionResult,
+  MuteConversationPayload,
+  MuteConversationResult,
+} from '../types/conversation-action.type';
 
 export const conversationsApi = {
   getConversations: async (): Promise<Conversation[]> => {
@@ -32,8 +37,32 @@ export const conversationsApi = {
     const response = await apiClient.post(`/conversations/${conversationId}/read`);
     return response.data.data;
   },
-  
-  sendMessage: async (conversationId: string, content: string, media_ids: string[] = []): Promise<void> => {
-    // Actually sending message can be via socket or REST. We will rely on socket for real-time.
-  }
+
+  pinConversation: async (conversationId: string): Promise<ConversationActionResult> => {
+    const response = await apiClient.post(`/conversations/${conversationId}/pin`);
+    return response.data.data;
+  },
+
+  unpinConversation: async (conversationId: string): Promise<ConversationActionResult> => {
+    const response = await apiClient.delete(`/conversations/${conversationId}/pin`);
+    return response.data.data;
+  },
+
+  muteConversation: async (
+    conversationId: string,
+    payload: MuteConversationPayload,
+  ): Promise<MuteConversationResult> => {
+    const response = await apiClient.post(`/conversations/${conversationId}/mute`, payload);
+    return response.data.data;
+  },
+
+  unmuteConversation: async (
+    conversationId: string,
+    type: Conversation['type'],
+  ): Promise<ConversationActionResult> => {
+    const response = await apiClient.delete(`/conversations/${conversationId}/mute`, {
+      params: { type },
+    });
+    return response.data.data;
+  },
 };
