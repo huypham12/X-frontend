@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Bell, BellOff, Pin, PinOff, UserRound, UsersRound } from 'lucide-react';
+import { Bell, BellOff, Pin, PinOff, Search, UserRound, UsersRound } from 'lucide-react';
 import { FriendPresenceDot } from '@/features/users/components/friend-presence-dot';
 import type { Conversation } from '../types';
 import { useConversationActions } from '../hooks/use-conversation-actions';
 import { MuteConversationDialog } from './mute-conversation-dialog';
+import { useConversationDetailsStore } from '../stores/conversation-details.store';
 
 interface ConversationDetailsOverviewProps {
   conversation: Conversation;
@@ -30,6 +31,7 @@ export const ConversationDetailsOverview = ({
   isPartnerOnline,
 }: ConversationDetailsOverviewProps) => {
   const [isMuteDialogOpen, setIsMuteDialogOpen] = useState(false);
+  const openView = useConversationDetailsStore((state) => state.openView);
   const isDirect = conversation.type === 'direct';
   const name = isDirect
     ? conversation.partner_info?.name || 'Unknown user'
@@ -106,6 +108,15 @@ export const ConversationDetailsOverview = ({
 
       <div className="border-b border-[#2f3336] px-6 py-5">
         <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => openView('search')}
+            className="col-span-2 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#121212] px-3 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          >
+            <Search className="h-5 w-5" aria-hidden="true" />
+            Search messages
+          </button>
+
           <button
             type="button"
             onClick={togglePin}

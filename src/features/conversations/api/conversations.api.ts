@@ -5,6 +5,11 @@ import type {
   MuteConversationPayload,
   MuteConversationResult,
 } from '../types/conversation-action.type';
+import type {
+  MessageContextData,
+  MessageContextOptions,
+  MessageSearchPage,
+} from '../types/message-search.type';
 
 export const conversationsApi = {
   getConversations: async (): Promise<Conversation[]> => {
@@ -20,6 +25,39 @@ export const conversationsApi = {
     }
     
     const response = await apiClient.get(`/conversations/${conversationId}/messages?${params.toString()}`);
+    return response.data.data;
+  },
+
+  searchMessages: async (
+    conversationId: string,
+    keyword: string,
+    limit: number = 20,
+    cursor?: string,
+  ): Promise<MessageSearchPage> => {
+    const response = await apiClient.get(`/conversations/${conversationId}/search`, {
+      params: {
+        q: keyword,
+        limit,
+        ...(cursor ? { cursor } : {}),
+      },
+    });
+    return response.data.data;
+  },
+
+  getMessageContext: async (
+    conversationId: string,
+    messageId: string,
+    options: MessageContextOptions = {},
+  ): Promise<MessageContextData> => {
+    const response = await apiClient.get(
+      `/conversations/${conversationId}/messages/${messageId}/context`,
+      {
+        params: {
+          before: options.before ?? 20,
+          after: options.after ?? 20,
+        },
+      },
+    );
     return response.data.data;
   },
 

@@ -293,6 +293,8 @@ Framer Motion chỉ dùng `AnimatePresence` + fade/translate nhỏ trong 150–2
 
 ## Phase 7 — Tìm kiếm tin nhắn trong panel
 
+**Trạng thái: Đã hoàn thành.**
+
 **Một chức năng:** nhập từ khóa và xem kết quả phân trang.
 
 **File tạo mới:**
@@ -319,6 +321,8 @@ Framer Motion chỉ dùng `AnimatePresence` + fade/translate nhỏ trong 150–2
 **Gate hoàn thành:** đổi keyword không trộn cache, request rỗng không chạy, pagination không lặp message, revoked/deleted không xuất hiện.
 
 ## Phase 8 — Backend endpoint lấy context quanh một message
+
+**Trạng thái: Đã hoàn thành.**
 
 **Một chức năng:** trả một cửa sổ message quanh kết quả search để frontend nhảy chính xác tới tin cũ.
 
@@ -355,6 +359,8 @@ data: {
 **Gate hoàn thành:** id ngoài conversation trả 404/403 phù hợp; context chứa target đúng một lần; query cũ/mới ở đầu/cuối conversation vẫn đúng.
 
 ## Phase 9 — Nhảy tới và highlight message từ search
+
+**Trạng thái: Đã hoàn thành.**
 
 **Một chức năng:** “Xem trong cuộc trò chuyện”.
 

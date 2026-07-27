@@ -8,15 +8,25 @@ import { AudioPlayer } from '@/features/media/components/viewers/AudioPlayer';
 interface MessageBubbleProps {
   message: Message;
   isMine: boolean;
+  isHighlighted?: boolean;
 }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isMine }) => {
+export const MessageBubble: React.FC<MessageBubbleProps> = ({
+  message,
+  isMine,
+  isHighlighted = false,
+}) => {
   const timeString = message.send_at ? format(new Date(message.send_at), 'h:mm a') : '';
   const medias = message.medias_info || [];
   const hasContent = Boolean(message.content?.trim());
   
   return (
-    <div className={`flex w-full ${isMine ? 'justify-end' : 'justify-start'} mb-4`}>
+    <div
+      data-message-id={message._id}
+      className={`mb-4 flex w-full rounded-xl px-1 py-1 transition-colors duration-200 motion-reduce:transition-none ${
+        isMine ? 'justify-end' : 'justify-start'
+      } ${isHighlighted ? 'bg-[#1d9bf0]/10 ring-1 ring-[#1d9bf0]' : ''}`}
+    >
       <div className={`max-w-[70%] flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
         {hasContent && (
           <div

@@ -1,11 +1,12 @@
 'use client';
 
 import type { RefObject } from 'react';
-import { RotateCcw, X } from 'lucide-react';
+import { ArrowLeft, RotateCcw, X } from 'lucide-react';
 import { useFriendPresence } from '@/features/users/hooks/use-friend-presence';
 import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import { useConversations } from '../hooks/use-conversations';
 import { ConversationDetailsOverview } from './conversation-details-overview';
+import { ConversationSearchView } from './conversation-search-view';
 
 interface ConversationDetailsPanelProps {
   conversationId: string;
@@ -28,6 +29,8 @@ export const ConversationDetailsPanel = ({
 }: ConversationDetailsPanelProps) => {
   const { data: conversations, isLoading, isError, refetch } = useConversations();
   const closeDetails = useConversationDetailsStore((state) => state.closeDetails);
+  const view = useConversationDetailsStore((state) => state.view);
+  const openView = useConversationDetailsStore((state) => state.openView);
   const { isOnlineFriend } = useFriendPresence();
   const conversation = conversations?.find((item) => item._id === conversationId);
 
@@ -38,14 +41,26 @@ export const ConversationDetailsPanel = ({
       className="flex h-full min-h-0 w-full flex-col bg-black text-white"
     >
       <header className="flex h-[65px] shrink-0 items-center justify-between border-b border-[#2f3336] px-4">
-        <h2
-          id={`${panelId}-title`}
-          ref={headingRef}
-          tabIndex={headingRef ? -1 : undefined}
-          className="text-xl font-bold outline-none"
-        >
-          Conversation details
-        </h2>
+        <div className="flex min-w-0 items-center gap-2">
+          {view !== 'overview' && (
+            <button
+              type="button"
+              onClick={() => openView('overview')}
+              aria-label="Back to conversation details"
+              className="shrink-0 rounded-full p-2 text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+            </button>
+          )}
+          <h2
+            id={`${panelId}-title`}
+            ref={headingRef}
+            tabIndex={headingRef ? -1 : undefined}
+            className="truncate text-xl font-bold outline-none"
+          >
+            {view === 'search' ? 'Search messages' : 'Conversation details'}
+          </h2>
+        </div>
         <button
           type="button"
           onClick={closeDetails}
@@ -73,6 +88,8 @@ export const ConversationDetailsPanel = ({
               Retry
             </button>
           </div>
+        ) : conversation && view === 'search' ? (
+          <ConversationSearchView conversation={conversation} />
         ) : conversation ? (
           <ConversationDetailsOverview
             conversation={conversation}

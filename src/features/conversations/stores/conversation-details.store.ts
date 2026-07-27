@@ -4,17 +4,19 @@ import type { ConversationPanelView } from '../types/conversation-panel.type';
 interface ConversationDetailsState {
   openConversationId: string | null;
   view: ConversationPanelView;
+  targetConversationId: string | null;
   targetMessageId: string | null;
   toggleDetails: (conversationId: string) => void;
   closeDetails: () => void;
   openView: (view: ConversationPanelView) => void;
-  focusMessage: (messageId: string) => void;
+  focusMessage: (conversationId: string, messageId: string) => void;
   clearFocusedMessage: () => void;
 }
 
 const CLOSED_DETAILS_STATE = {
   openConversationId: null,
   view: 'overview' as const,
+  targetConversationId: null,
   targetMessageId: null,
 };
 
@@ -29,12 +31,19 @@ export const useConversationDetailsStore = create<ConversationDetailsState>((set
       return {
         openConversationId: conversationId,
         view: 'overview',
+        targetConversationId: null,
         targetMessageId: null,
       };
     }),
   closeDetails: () => set(CLOSED_DETAILS_STATE),
   openView: (view) =>
     set((state) => (state.openConversationId ? { view } : state)),
-  focusMessage: (messageId) => set({ targetMessageId: messageId }),
-  clearFocusedMessage: () => set({ targetMessageId: null }),
+  focusMessage: (conversationId, messageId) =>
+    set({
+      openConversationId: null,
+      view: 'overview',
+      targetConversationId: conversationId,
+      targetMessageId: messageId,
+    }),
+  clearFocusedMessage: () => set({ targetConversationId: null, targetMessageId: null }),
 }));
