@@ -39,7 +39,7 @@ export const MediaUploadButton = ({
         onChange={handleFileChange}
         className="hidden"
         multiple={maxFiles > 1}
-        accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime,audio/mpeg,audio/wav"
+        accept="image/*,video/*,audio/*"
         disabled={disabled}
       />
       <button

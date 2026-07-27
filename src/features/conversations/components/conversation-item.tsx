@@ -4,16 +4,19 @@ import React from 'react';
 import { Conversation } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { FriendPresenceDot } from '@/features/users/components/friend-presence-dot';
 
 interface ConversationItemProps {
   conversation: Conversation;
   isActive: boolean;
+  isOnline?: boolean;
   onClick: (conversationId: string) => void;
 }
 
 export const ConversationItem: React.FC<ConversationItemProps> = ({
   conversation,
   isActive,
+  isOnline = false,
   onClick,
 }) => {
   const { user } = useAuthStore();
@@ -35,9 +38,17 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
     : '';
 
   const isSentByMe = conversation.last_message_preview?.sender_id === user?._id;
-  const lastMessageText = conversation.last_message_preview?.message_type === 'image'
-    ? 'Sent an image'
-    : conversation.last_message_preview?.content || 'Started a conversation';
+  const messageTypeLabels: Partial<Record<Conversation['last_message_preview']['message_type'], string>> = {
+    image: 'Sent an image',
+    video: 'Sent a video',
+    audio: 'Sent an audio',
+    file: 'Sent a file',
+  };
+  const lastMessageType = conversation.last_message_preview?.message_type;
+  const lastMessageText =
+    (lastMessageType && messageTypeLabels[lastMessageType]) ||
+    conversation.last_message_preview?.content ||
+    'Started a conversation';
 
   return (
     <div
@@ -45,10 +56,13 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       className={`flex items-center gap-3 p-4 cursor-pointer transition duration-200 ease-in-out border-b border-[#2f3336]
         ${isActive ? 'bg-[#181818]' : 'hover:bg-[#121212]'}`}
     >
-      <div className="w-12 h-12 rounded-full bg-gray-600 flex-shrink-0 overflow-hidden">
-        {/* Replace with next/image later if avatar is available */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={avatar} alt={title} className="w-full h-full object-cover" />
+      <div className="relative shrink-0">
+        <div className="h-12 w-12 overflow-hidden rounded-full bg-gray-600">
+          {/* Replace with next/image later if avatar is available */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={avatar} alt={title} className="h-full w-full object-cover" />
+        </div>
+        <FriendPresenceDot isOnline={conversation.type === 'direct' && isOnline} />
       </div>
       
       <div className="flex-1 min-w-0">

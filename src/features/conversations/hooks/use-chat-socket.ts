@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useSocket } from '@/providers/socket-provider';
-import { Message, Conversation } from '../types';
+import type { Conversation, Message, MessageType, PaginationResponse } from '../types';
 import { CONVERSATIONS_QUERY_KEY } from './use-conversations';
 import { MESSAGES_QUERY_KEY } from './use-messages';
 
@@ -13,25 +13,25 @@ export const useChatSocket = (conversationId?: string) => {
     if (!socket || !isConnected) return;
 
     const handleReceiveMessage = (newMessage: Message) => {
+      const messageType: MessageType = newMessage.medias_info?.[0]?.type || 'text';
+
       // 1. Update Messages list if we are currently viewing this conversation
       if (conversationId && newMessage.conversation_id === conversationId) {
-        queryClient.setQueryData(MESSAGES_QUERY_KEY(conversationId), (oldData: any) => {
-          if (!oldData || !oldData.pages) return oldData;
+        queryClient.setQueryData<InfiniteData<PaginationResponse<Message>, string | undefined>>(
+          MESSAGES_QUERY_KEY(conversationId),
+          (oldData) => {
+            if (!oldData) return oldData;
           
-          // messages are returned newest first in API? Yes: sort({_id: -1}) 
-          // So new message goes to the beginning of the first page.
-          const newPages = [...oldData.pages];
-          if (newPages.length > 0) {
-            newPages[0] = {
-              ...newPages[0],
-              messages: [newMessage, ...newPages[0].messages]
-            };
+            // The API returns newest messages first, so prepend to the first page.
+            const newPages = oldData.pages.map((page, index) =>
+              index === 0
+                ? { ...page, messages: [newMessage, ...page.messages] }
+                : page
+            );
+
+            return { ...oldData, pages: newPages };
           }
-          return {
-            ...oldData,
-            pages: newPages,
-          };
-        });
+        );
       }
 
       // 2. Update Conversations list (last message preview & timestamp)
@@ -46,7 +46,7 @@ export const useChatSocket = (conversationId?: string) => {
               last_message_preview: {
                 sender_id: newMessage.sender_id,
                 content: newMessage.content,
-                message_type: newMessage.media_ids && newMessage.media_ids.length > 0 ? 'image' : 'text'
+                message_type: messageType
               }
             };
           }

@@ -3,9 +3,10 @@
 import React from 'react';
 import { useConversations } from '../hooks/use-conversations';
 import { ConversationItem } from './conversation-item';
-import { Mail, Search, MessageSquarePlus } from 'lucide-react';
+import { Search, MessageSquarePlus } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import { FollowingListForChat } from './following-list';
+import { useFriendPresence } from '@/features/users/hooks/use-friend-presence';
 
 export const ConversationSidebar = () => {
   const { data: conversations, isLoading, isError } = useConversations();
@@ -14,6 +15,7 @@ export const ConversationSidebar = () => {
   const router = useRouter();
   const params = useParams();
   const activeConversationId = params.conversationId as string;
+  const { isOnlineFriend } = useFriendPresence();
 
   return (
     <div className="w-full sm:w-[350px] h-full flex flex-col bg-black">
@@ -78,6 +80,7 @@ export const ConversationSidebar = () => {
               key={conv._id} 
               conversation={conv} 
               isActive={activeConversationId === conv._id}
+              isOnline={conv.type === 'direct' && isOnlineFriend(conv.partner_id)}
               onClick={(id) => router.push(`/messages/${id}`)}
             />
           ))
@@ -86,4 +89,3 @@ export const ConversationSidebar = () => {
     </div>
   );
 };
-

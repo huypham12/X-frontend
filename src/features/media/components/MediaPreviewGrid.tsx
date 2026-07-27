@@ -24,15 +24,20 @@ export const MediaPreviewGrid = ({
   if (mediaItems.length === 0) return null;
 
   return (
-    <div className={`mt-3 grid gap-2 ${mediaItems.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+    <div className={`mt-3 grid items-start gap-2 ${mediaItems.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
       {mediaItems.map((item) => {
-        const aspectClass = mediaItems.length === 1 ? 'aspect-video' : 'aspect-square';
+        const previewSizeClass =
+          item.type === 'audio'
+            ? 'h-24'
+            : mediaItems.length === 1
+              ? 'aspect-video'
+              : 'aspect-square';
         const isBusy = item.status === 'uploading' || item.status === 'processing';
 
         return (
           <div
             key={item.id}
-            className={`relative overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 ${aspectClass}`}
+            className={`relative w-full overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 ${previewSizeClass}`}
           >
             <button
               type="button"

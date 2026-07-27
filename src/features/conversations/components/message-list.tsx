@@ -13,9 +13,14 @@ interface MessageListProps {
 export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
   const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useMessages(conversationId);
   const { user } = useAuthStore();
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
+  const hasInitiallyScrolledRef = useRef(false);
+  const isNearBottomRef = useRef(true);
+  const previousLatestMessageIdRef = useRef<string | undefined>(undefined);
   
   const { ref: loadMoreRef, inView } = useInView();
+  const initialPageMessageCount = data?.pages?.[0]?.messages?.length ?? 0;
+  const latestMessageId = data?.pages?.[0]?.messages?.[0]?._id;
 
   useEffect(() => {
     if (inView && hasNextPage && !isFetchingNextPage) {
@@ -23,19 +28,33 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
     }
   }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  // Scroll to bottom when initially loaded
   useEffect(() => {
-    if (!isLoading && data?.pages?.[0]?.messages?.length) {
-      bottomRef.current?.scrollIntoView({ behavior: 'auto' });
-    }
-  }, [isLoading]);
+    hasInitiallyScrolledRef.current = false;
+    isNearBottomRef.current = true;
+    previousLatestMessageIdRef.current = undefined;
+  }, [conversationId]);
 
-  // When a new message comes in, scroll to bottom
+  // Scroll only the message container, never the page containing the composer.
   useEffect(() => {
-    // Only scroll if we are already near the bottom, otherwise don't disrupt the user
-    // For simplicity, we just scroll to bottom if new messages are added
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [data?.pages?.[0]?.messages?.[0]?._id]);
+    const messageList = messageListRef.current;
+    if (!isLoading && initialPageMessageCount > 0 && messageList && !hasInitiallyScrolledRef.current) {
+      messageList.scrollTop = messageList.scrollHeight;
+      hasInitiallyScrolledRef.current = true;
+    }
+  }, [isLoading, initialPageMessageCount, conversationId]);
+
+  // Keep the user's reading position when they are looking at older messages.
+  useEffect(() => {
+    const messageList = messageListRef.current;
+    const previousLatestMessageId = previousLatestMessageIdRef.current;
+    const hasNewMessage = Boolean(previousLatestMessageId && latestMessageId !== previousLatestMessageId);
+
+    if (messageList && hasNewMessage && isNearBottomRef.current) {
+      messageList.scrollTo({ top: messageList.scrollHeight, behavior: 'smooth' });
+    }
+
+    previousLatestMessageIdRef.current = latestMessageId;
+  }, [latestMessageId]);
 
   if (isLoading) {
     return (
@@ -58,7 +77,16 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
   const allMessages = data?.pages.flatMap((page) => page.messages).reverse() || [];
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar flex flex-col">
+    <div
+      ref={messageListRef}
+      onScroll={(event) => {
+        const messageList = event.currentTarget;
+        const distanceFromBottom =
+          messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight;
+        isNearBottomRef.current = distanceFromBottom < 120;
+      }}
+      className="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-4"
+    >
       {hasNextPage && (
         <div ref={loadMoreRef} className="py-4 flex justify-center">
           {isFetchingNextPage ? (
@@ -83,7 +111,7 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
           />
         ))
       )}
-      <div ref={bottomRef} className="h-1" />
+      <div className="h-1" />
     </div>
   );
 };

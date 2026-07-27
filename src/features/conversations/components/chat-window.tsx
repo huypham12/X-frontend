@@ -7,6 +7,8 @@ import { MessageInput } from './message-input';
 import { Info, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useFriendPresence } from '@/features/users/hooks/use-friend-presence';
+import { FriendPresenceDot } from '@/features/users/components/friend-presence-dot';
 
 interface ChatWindowProps {
   conversationId: string;
@@ -15,6 +17,7 @@ interface ChatWindowProps {
 export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
   const router = useRouter();
   const { data: conversations } = useConversations();
+  const { isOnlineFriend } = useFriendPresence();
   const conversation = conversations?.find(c => c._id === conversationId);
 
   if (!conversation) {
@@ -28,24 +31,31 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
   let title = 'Unknown';
   let avatar = '/default-avatar.png';
   let profileLink = '#';
+  let isPartnerOnline = false;
 
   if (conversation.type === 'direct') {
     title = conversation.partner_info?.name || 'Unknown User';
     avatar = conversation.partner_info?.avatar || '/default-avatar.png';
-    profileLink = `/${conversation.partner_info?.username}`;
+    profileLink = conversation.partner_info?.username
+      ? `/profile/${encodeURIComponent(conversation.partner_info.username)}`
+      : '/profile';
+    isPartnerOnline = isOnlineFriend(conversation.partner_id);
   } else if (conversation.type === 'group') {
     title = conversation.name || 'Group Chat';
     avatar = conversation.avatar_url || '/default-group.png';
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-black">
+    <div className="sticky top-10 flex h-[calc(100dvh-2.5rem)] min-h-0 flex-1 flex-col overflow-hidden bg-black lg:top-0 lg:h-dvh">
       {/* Header */}
-      <div className="p-4 border-b border-[#2f3336] flex items-center justify-between sticky top-0 bg-black/80 backdrop-blur-md z-10">
+      <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-[#2f3336] bg-black/80 p-4 backdrop-blur-md">
         <Link href={profileLink} className="flex items-center gap-3 hover:opacity-80 transition">
-          <div className="w-8 h-8 rounded-full bg-gray-600 flex-shrink-0 overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={avatar} alt={title} className="w-full h-full object-cover" />
+          <div className="relative shrink-0">
+            <div className="h-8 w-8 overflow-hidden rounded-full bg-gray-600">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={avatar} alt={title} className="h-full w-full object-cover" />
+            </div>
+            <FriendPresenceDot isOnline={isPartnerOnline} />
           </div>
           <h2 className="text-xl font-bold text-white">{title}</h2>
         </Link>

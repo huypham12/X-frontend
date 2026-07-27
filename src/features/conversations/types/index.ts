@@ -1,4 +1,6 @@
-export type MessageType = 'text' | 'image' | 'video' | 'file';
+import type { MediaMetadata } from '@/features/media/types/media.type';
+
+export type MessageType = 'text' | 'image' | 'video' | 'audio' | 'file';
 export type ConversationType = 'direct' | 'group';
 
 export interface UserPreview {
@@ -35,7 +37,7 @@ export interface Message {
   sender_id: string;
   content: string;
   media_ids: string[];
-  medias_info?: any[];
+  medias_info?: MediaMetadata[];
   send_at: string;
   read_by: string[];
   reply_to_message_id?: string;
