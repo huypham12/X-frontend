@@ -11,6 +11,7 @@ import { useConversationDetailsStore } from '../stores/conversation-details.stor
 import { useMessageContext } from '../hooks/use-message-context';
 import { useMessageActions } from '../hooks/use-message-actions';
 import { RevokeMessageDialog } from './revoke-message-dialog';
+import { DeleteMessageDialog } from './delete-message-dialog';
 import type { Message } from '../types';
 
 interface MessageListProps {
@@ -50,7 +51,15 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
   const prefersReducedMotion = useReducedMotion();
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [messageToRevoke, setMessageToRevoke] = useState<Message | null>(null);
-  const { isRevokePending, pendingMessageId, revokeMessage } = useMessageActions(conversationId);
+  const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
+  const {
+    isRevokePending,
+    revokePendingMessageId,
+    revokeMessage,
+    isDeletePending,
+    deletePendingMessageId,
+    deleteMessage,
+  } = useMessageActions(conversationId);
   const messageListRef = useRef<HTMLDivElement>(null);
   const hasInitiallyScrolledRef = useRef(false);
   const isNearBottomRef = useRef(true);
@@ -60,6 +69,22 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
   const { ref: loadMoreRef, inView } = useInView();
   const initialPageMessageCount = data?.pages?.[0]?.messages?.length ?? 0;
   const latestMessageId = data?.pages?.[0]?.messages?.[0]?._id;
+
+  useEffect(() => {
+    if (!messageToDelete || isDeletePending) return;
+
+    const timelineMessage = data?.pages
+      .flatMap((page) => page.messages)
+      .find((message) => message._id === messageToDelete._id);
+    const contextMessage = contextData?.messages.find(
+      (message) => message._id === messageToDelete._id,
+    );
+    const currentMessage = timelineMessage ?? contextMessage;
+
+    if (!currentMessage || currentMessage.status !== 'sent') {
+      setMessageToDelete(null);
+    }
+  }, [contextData, data, isDeletePending, messageToDelete]);
 
   useEffect(() => {
     if (!targetMessageId && inView && hasNextPage && !isFetchingNextPage) {
@@ -235,8 +260,14 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
                   isFirstInCluster={previousMessage?.sender_id !== message.sender_id}
                   isLastInCluster={nextMessage?.sender_id !== message.sender_id}
                   isHighlighted={message._id === highlightedMessageId}
-                  isRevokePending={isRevokePending && pendingMessageId === message._id}
+                  isRevokePending={
+                    isRevokePending && revokePendingMessageId === message._id
+                  }
+                  isDeletePending={
+                    isDeletePending && deletePendingMessageId === message._id
+                  }
                   onRequestRevoke={setMessageToRevoke}
+                  onRequestDelete={setMessageToDelete}
                 />
               );
             })
@@ -252,6 +283,14 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
           if (!open) setMessageToRevoke(null);
         }}
         onConfirm={revokeMessage}
+      />
+      <DeleteMessageDialog
+        message={messageToDelete}
+        isPending={isDeletePending}
+        onOpenChange={(open) => {
+          if (!open) setMessageToDelete(null);
+        }}
+        onConfirm={deleteMessage}
       />
     </>
   );

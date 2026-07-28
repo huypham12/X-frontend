@@ -78,12 +78,12 @@ reply_to?: {
 } | null
 
 reactions: Array<{ emoji: string, user_id: string }>
-deleted_by?: string[]
 ```
 
 - `sender_info` và `reply_to` là response projection, không copy name/avatar vào schema message.
 - Message revoked trả tombstone, không trả lại content/media/reaction cũ.
 - Message đã bị actor delete hoặc nằm trước `cleared_at` không xuất hiện trong response của actor.
+- `deleted_by` chỉ tồn tại nội bộ trong MongoDB để tính visibility; REST/socket không trả trạng thái riêng tư này cho member khác.
 - Cache Redis vẫn có thể dùng chung, nhưng trước khi trả phải áp dụng visibility của actor; cache không đủ `limit` sau lọc thì fallback MongoDB thay vì trả thiếu trang.
 
 ### 3.3. Ranh giới frontend
@@ -345,7 +345,7 @@ Mỗi payload tối thiểu có `conversation_id`, `message_id` nếu liên quan
 
 ## Phase 8 — Data contract cho delete message phía mình
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Hai chức năng nền:** visibility riêng theo message; preview riêng theo user khi cần.
 
@@ -372,7 +372,7 @@ Mỗi payload tối thiểu có `conversation_id`, `message_id` nếu liên quan
 
 ## Phase 9 — Backend delete message for me
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Một chức năng:** member xóa một message chỉ khỏi phía mình.
 
@@ -388,17 +388,17 @@ Mỗi payload tối thiểu có `conversation_id`, `message_id` nếu liên quan
 
 **Chi tiết:**
 
-1. `DELETE /messages/:message_id` cho mọi current member đang thấy message; atomic `$addToSet` actor vào `deleted_by`, không đổi global status.
+1. `DELETE /messages/:message_id` cho mọi current member đang thấy message; transaction thêm actor vào `deleted_by` và cập nhật preview override cùng lúc, không đổi global status.
 2. Main messages, context, search, shared media và reaction-details đều áp dụng `deleted_by != currentUserId` trước sort/limit.
-3. Cache hit lọc theo actor; nếu còn dưới `limit`, fallback MongoDB để pagination không hụt/duplicate.
-4. Nếu actor xóa preview hiện tại, tính preview visible gần nhất cho actor và lưu override; không sửa preview của người khác.
+3. Cache hit lọc theo actor và chỉ được dùng khi chứng minh có hơn `limit` message visible; trường hợp còn lại fallback MongoDB để pagination không hụt/duplicate.
+4. Mỗi delete recompute preview visible gần nhất của actor trong cùng transaction; các delete đồng thời hoặc send/delete cạnh tranh trên conversation document để MongoDB retry thay vì ghi override cũ.
 5. Emit `@message:deleted-for-me` chỉ tới personal room actor; không gửi cho member khác.
 
 **Gate hoàn thành:** actor có thể xóa message của mình hoặc người khác chỉ phía actor; thiết bị thứ hai của actor đồng bộ; B vẫn thấy message; search/media/context không làm message xuất hiện lại.
 
 ## Phase 10 — Frontend delete message for me
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Một chức năng:** menu và confirm xóa message phía mình.
 

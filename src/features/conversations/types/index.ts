@@ -11,6 +11,7 @@ export interface UserPreview {
 }
 
 export interface MessagePreview {
+  message_id?: string;
   sender_id: string;
   content: string;
   message_type: MessageType;

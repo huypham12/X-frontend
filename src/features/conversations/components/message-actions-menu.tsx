@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Ellipsis, Reply, Undo2 } from 'lucide-react';
+import { Ellipsis, Reply, Trash2, Undo2 } from 'lucide-react';
 import type { Message } from '../types';
 import { useMessageComposerStore } from '../stores/message-composer.store';
 
@@ -9,14 +9,18 @@ interface MessageActionsMenuProps {
   message: Message;
   isMine: boolean;
   isRevokePending?: boolean;
+  isDeletePending?: boolean;
   onRequestRevoke?: (message: Message) => void;
+  onRequestDelete?: (message: Message) => void;
 }
 
 export const MessageActionsMenu = ({
   message,
   isMine,
   isRevokePending = false,
+  isDeletePending = false,
   onRequestRevoke,
+  onRequestDelete,
 }: MessageActionsMenuProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -106,6 +110,22 @@ export const MessageActionsMenu = ({
             >
               <Undo2 className="h-4 w-4" aria-hidden="true" />
               Revoke
+            </button>
+          )}
+
+          {onRequestDelete && (
+            <button
+              type="button"
+              role="menuitem"
+              disabled={isDeletePending}
+              onClick={() => {
+                closeAndRestoreFocus();
+                onRequestDelete(message);
+              }}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium text-red-400 transition-colors duration-200 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              Delete for me
             </button>
           )}
         </div>

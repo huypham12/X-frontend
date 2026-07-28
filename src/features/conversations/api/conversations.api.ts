@@ -193,4 +193,9 @@ export const conversationsApi = {
     const response = await apiClient.post(`/conversations/messages/${messageId}/revoke`);
     return response.data.data;
   },
+
+  deleteMessage: async (messageId: string): Promise<MessageActionResult> => {
+    const response = await apiClient.delete(`/conversations/messages/${messageId}`);
+    return response.data.data;
+  },
 };

@@ -10,7 +10,9 @@ interface MessageRowProps {
   isLastInCluster: boolean;
   isHighlighted?: boolean;
   isRevokePending?: boolean;
+  isDeletePending?: boolean;
   onRequestRevoke?: (message: Message) => void;
+  onRequestDelete?: (message: Message) => void;
 }
 
 export const MessageRow = ({
@@ -20,7 +22,9 @@ export const MessageRow = ({
   isLastInCluster,
   isHighlighted = false,
   isRevokePending = false,
+  isDeletePending = false,
   onRequestRevoke,
+  onRequestDelete,
 }: MessageRowProps) => {
   const showGroupSenderName =
     !isMine && message.conversation_type === 'group' && isFirstInCluster;
@@ -67,7 +71,9 @@ export const MessageRow = ({
           message={message}
           isMine={isMine}
           isRevokePending={isRevokePending}
+          isDeletePending={isDeletePending}
           onRequestRevoke={onRequestRevoke}
+          onRequestDelete={onRequestDelete}
         />
       </div>
     </div>

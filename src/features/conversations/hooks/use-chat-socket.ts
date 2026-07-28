@@ -6,9 +6,15 @@ import type { Conversation, Message, MessageType, PaginationResponse } from '../
 import { CONVERSATIONS_QUERY_KEY } from './use-conversations';
 import { MESSAGES_QUERY_KEY } from './use-messages';
 import { conversationPartnerProfileQueryKey } from './use-conversation-partner-profile';
-import type { MessageRevokedEvent } from '../types/message-action.type';
+import type {
+  MessageDeletedForMeEvent,
+  MessageRevokedEvent,
+} from '../types/message-action.type';
 import {
+  clearDeletedMessageSelections,
+  refreshDeletedMessageQueries,
   refreshRevokedMessageQueries,
+  syncDeletedMessageCaches,
   syncRevokedMessageCaches,
 } from './use-message-actions';
 import { useMessageComposerStore } from '../stores/message-composer.store';
@@ -74,6 +80,7 @@ export const useChatSocket = (conversationId?: string, partnerUsername?: string)
               ...conv,
               last_message_at: newMessage.send_at,
               last_message_preview: {
+                message_id: newMessage._id,
                 sender_id: newMessage.sender_id,
                 content: newMessage.content,
                 message_type: messageType
@@ -113,14 +120,22 @@ export const useChatSocket = (conversationId?: string, partnerUsername?: string)
       void refreshRevokedMessageQueries(queryClient, event.conversation_id);
     };
 
+    const handleMessageDeletedForMe = (event: MessageDeletedForMeEvent) => {
+      syncDeletedMessageCaches(queryClient, event);
+      clearDeletedMessageSelections(event);
+      void refreshDeletedMessageQueries(queryClient, event);
+    };
+
     socket.on('@conversation:receive', handleReceiveMessage);
     socket.on('@conversation:error', handleConversationError);
     socket.on('@message:revoked', handleMessageRevoked);
+    socket.on('@message:deleted-for-me', handleMessageDeletedForMe);
 
     return () => {
       socket.off('@conversation:receive', handleReceiveMessage);
       socket.off('@conversation:error', handleConversationError);
       socket.off('@message:revoked', handleMessageRevoked);
+      socket.off('@message:deleted-for-me', handleMessageDeletedForMe);
     };
   }, [socket, isConnected, queryClient, conversationId, partnerUsername]);
 
