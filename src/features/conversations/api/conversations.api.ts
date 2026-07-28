@@ -12,6 +12,7 @@ import type {
 } from '../types/message-search.type';
 import type { ConversationMediaPage } from '../types/conversation-media.type';
 import type { CreateGroupPayload, CreatedGroupConversation } from '../types/create-group.type';
+import type { GroupConversationLookupPage } from '../types/conversation-lookup.type';
 
 export const conversationsApi = {
   getConversations: async (): Promise<Conversation[]> => {
@@ -82,10 +83,35 @@ export const conversationsApi = {
     return response.data.data;
   },
 
+  searchGroupConversations: async (
+    keyword: string,
+    limit: number = 10,
+    cursor?: string,
+  ): Promise<GroupConversationLookupPage> => {
+    const response = await apiClient.get('/conversations/groups/search', {
+      params: {
+        q: keyword,
+        limit,
+        ...(cursor ? { cursor } : {}),
+      },
+    });
+    return response.data.data;
+  },
+
   createGroupConversation: async (
     data: CreateGroupPayload,
   ): Promise<CreatedGroupConversation> => {
     const response = await apiClient.post('/conversations/group', data);
+    return response.data.data;
+  },
+
+  hideConversation: async (conversationId: string): Promise<ConversationActionResult> => {
+    const response = await apiClient.delete(`/conversations/${conversationId}`);
+    return response.data.data;
+  },
+
+  unhideConversation: async (conversationId: string): Promise<ConversationActionResult> => {
+    const response = await apiClient.post(`/conversations/${conversationId}/unhide`);
     return response.data.data;
   },
 

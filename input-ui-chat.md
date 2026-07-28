@@ -84,17 +84,24 @@ Có thể làm các lựa chọn:
 
 Backend giới hạn tối đa năm hội thoại được ghim.
 
-### 5. Xóa hội thoại
+### 5. Ẩn hội thoại khỏi hộp thư
 
 `DELETE /conversations/:id` không xóa dữ liệu thật. Nó thêm user hiện tại vào `hidden_by`.
 
 Vì vậy trên giao diện nên ghi:
 
-> Xóa khỏi hộp thư của bạn
+> Ẩn khỏi hộp thư của bạn
 
 Không nên ghi “Xóa cuộc trò chuyện” theo nghĩa xóa cho cả hai bên.
 
-Hiện có một lỗi nhỏ: khi mở lại direct conversation, backend đang đặt toàn bộ `hidden_by: []`, có thể làm hội thoại xuất hiện lại cho cả người còn lại. Đúng hơn là chỉ `$pull` user đang mở lại.
+Trước Phase 12, khi mở lại direct conversation, backend từng đặt toàn bộ `hidden_by: []`, có thể làm hội thoại xuất hiện lại cho cả người còn lại. Logic này đã được sửa thành chỉ `$pull` user đang chủ động mở lại.
+
+Quy ước sản phẩm đã chốt cho thao tác ẩn:
+
+- Tin nhắn mới từ người còn lại hoặc thành viên group không tự làm hội thoại xuất hiện lại.
+- Người đã ẩn phải chủ động tìm lại người hoặc group trong ô tìm kiếm hộp thư rồi chọn kết quả để mở lại.
+- Tìm người tiếp tục giới hạn trong nguồn following hiện có; tìm group áp dụng cho mọi group mà current user vẫn là thành viên, kể cả group đang ẩn.
+- Mở lại chỉ `$pull` current user khỏi `hidden_by`, không thay đổi trạng thái ẩn của thành viên khác.
 
 ## Chức năng riêng cho group
 

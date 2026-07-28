@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Bell, BellOff, Images, Pin, PinOff, Search, UserPlus, UserRound, UsersRound } from 'lucide-react';
+import { Bell, BellOff, EyeOff, Images, Pin, PinOff, Search, UserPlus, UserRound, UsersRound } from 'lucide-react';
 import { FriendPresenceDot } from '@/features/users/components/friend-presence-dot';
 import type { Conversation } from '../types';
 import { useConversationActions } from '../hooks/use-conversation-actions';
 import { MuteConversationDialog } from './mute-conversation-dialog';
 import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import { CreateGroupWithPartnerDialog } from './create-group-with-partner-dialog';
+import { HideConversationDialog } from './hide-conversation-dialog';
 
 interface ConversationDetailsOverviewProps {
   conversation: Conversation;
@@ -32,6 +33,7 @@ export const ConversationDetailsOverview = ({
   isPartnerOnline,
 }: ConversationDetailsOverviewProps) => {
   const [isMuteDialogOpen, setIsMuteDialogOpen] = useState(false);
+  const [isHideDialogOpen, setIsHideDialogOpen] = useState(false);
   const [isCreateGroupDialogOpen, setIsCreateGroupDialogOpen] = useState(false);
   const openView = useConversationDetailsStore((state) => state.openView);
   const isDirect = conversation.type === 'direct';
@@ -44,9 +46,11 @@ export const ConversationDetailsOverview = ({
     mutedUntil,
     isPinPending,
     isMutePending,
+    isHidePending,
     togglePin,
     muteConversation,
     unmuteConversation,
+    hideConversation,
   } = useConversationActions(conversation);
 
   const muteStatus = isMuted
@@ -192,6 +196,16 @@ export const ConversationDetailsOverview = ({
               Create group with {name}
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setIsHideDialogOpen(true)}
+            disabled={isHidePending}
+            className="col-span-2 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#121212] px-3 py-3 text-sm font-semibold text-red-400 transition-colors duration-200 hover:bg-[#181818] hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <EyeOff className="h-5 w-5" aria-hidden="true" />
+            Hide from inbox
+          </button>
         </div>
 
         {muteStatus && (
@@ -211,6 +225,13 @@ export const ConversationDetailsOverview = ({
         isPending={isMutePending}
         onOpenChange={setIsMuteDialogOpen}
         onMute={muteConversation}
+      />
+
+      <HideConversationDialog
+        open={isHideDialogOpen}
+        isPending={isHidePending}
+        onOpenChange={setIsHideDialogOpen}
+        onHide={hideConversation}
       />
 
       {conversation.type === 'direct' && (

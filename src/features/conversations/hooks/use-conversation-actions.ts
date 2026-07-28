@@ -1,11 +1,13 @@
 'use client';
 
 import axios from 'axios';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { conversationsApi } from '../api/conversations.api';
 import { CONVERSATIONS_QUERY_KEY } from './use-conversations';
+import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import type { Conversation } from '../types';
 import type { MuteDurationHours } from '../types/conversation-action.type';
 
@@ -48,8 +50,10 @@ export const getActiveConversationMute = (
 };
 
 export const useConversationActions = (conversation: Conversation) => {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const currentUserId = useAuthStore((state) => state.user?._id);
+  const closeDetails = useConversationDetailsStore((state) => state.closeDetails);
   const activeMute = getActiveConversationMute(conversation, currentUserId);
 
   const updateConversationCache = (
@@ -155,6 +159,23 @@ export const useConversationActions = (conversation: Conversation) => {
     onSettled: () => queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY }),
   });
 
+  const hideMutation = useMutation({
+    mutationFn: () => conversationsApi.hideConversation(conversation._id),
+    onSuccess: async () => {
+      queryClient.setQueryData<Conversation[]>(CONVERSATIONS_QUERY_KEY, (currentConversations) =>
+        currentConversations?.filter(
+          (currentConversation) => currentConversation._id !== conversation._id,
+        ),
+      );
+      closeDetails();
+      router.replace('/messages');
+      await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, 'Could not hide conversation from your inbox.'));
+    },
+  });
+
   const muteConversation = async (durationHours?: MuteDurationHours) => {
     if (!currentUserId) {
       toast.error('Your account information is not available yet.');
@@ -169,13 +190,24 @@ export const useConversationActions = (conversation: Conversation) => {
     }
   };
 
+  const hideConversation = async () => {
+    try {
+      await hideMutation.mutateAsync();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   return {
     isMuted: Boolean(activeMute),
     mutedUntil: activeMute?.until ?? null,
     isPinPending: pinMutation.isPending,
     isMutePending: muteMutation.isPending || unmuteMutation.isPending,
+    isHidePending: hideMutation.isPending,
     togglePin: () => pinMutation.mutate(!conversation.is_pinned),
     muteConversation,
     unmuteConversation: () => unmuteMutation.mutate(),
+    hideConversation,
   };
 };

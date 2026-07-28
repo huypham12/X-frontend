@@ -7,6 +7,7 @@ import { Search, MessageSquarePlus } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import { FollowingListForChat } from './following-list';
 import { useFriendPresence } from '@/features/users/hooks/use-friend-presence';
+import { ConversationSearchResults } from './conversation-search-results';
 
 export const ConversationSidebar = () => {
   const { data: conversations, isLoading, isError } = useConversations();
@@ -16,6 +17,10 @@ export const ConversationSidebar = () => {
   const params = useParams();
   const activeConversationId = params.conversationId as string;
   const { isOnlineFriend } = useFriendPresence();
+  const closeSearch = () => {
+    setSearchQuery('');
+    setIsSearchFocused(false);
+  };
 
   return (
     <div className="w-full sm:w-[350px] h-full flex flex-col bg-black">
@@ -42,7 +47,8 @@ export const ConversationSidebar = () => {
               // Delay hiding search results so clicks can register
               setTimeout(() => setIsSearchFocused(false), 200);
             }}
-            placeholder="Search Direct Messages" 
+            placeholder="Search people and groups"
+            aria-label="Search people and groups"
             className="w-full bg-[#202327] text-white rounded-full py-2 pl-12 pr-4 focus:outline-none focus:bg-black focus:ring-1 focus:ring-white border border-transparent focus:border-white transition"
           />
         </div>
@@ -51,7 +57,10 @@ export const ConversationSidebar = () => {
       {/* List */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
         {isSearchFocused || searchQuery.trim().length > 0 ? (
-          <FollowingListForChat searchQuery={searchQuery} />
+          <ConversationSearchResults
+            keyword={searchQuery}
+            onConversationOpened={closeSearch}
+          />
         ) : isLoading ? (
           <div className="flex flex-col gap-4 p-4">
             {[1, 2, 3, 4, 5].map(i => (

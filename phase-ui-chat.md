@@ -49,7 +49,7 @@ Các chức năng dự kiến trong panel:
 - Media gửi trong chat hiện chỉ hỗ trợ `image | video | audio`; `file` trong type/preview không đồng nghĩa backend đã hỗ trợ PDF, Word hoặc file tài liệu.
 - `POST/DELETE /:id/pin`, `POST/DELETE /:id/mute`, `DELETE /:id`, group routes và user block routes đã tồn tại.
 - `DELETE /conversations/:id` chỉ thêm current user vào `hidden_by`; nhãn UI đúng phải là **“Ẩn/Xóa khỏi hộp thư của bạn”**, không được mô tả là xóa cho mọi người.
-- `getOrCreateDirectConversation()` đang reset `hidden_by: []`, có thể làm conversation hiện lại cho cả hai người. Phải đổi thành chỉ `$pull` người đang mở lại.
+- Trước Phase 12, `getOrCreateDirectConversation()` reset `hidden_by: []`, có thể làm conversation hiện lại cho cả hai người; hiện đã đổi thành chỉ `$pull` người đang mở lại.
 - Nhiều method nhận `userId` nhưng chưa kiểm tra membership; riêng `getMessages()` còn chưa nhận `userId` từ controller. Không được public search/media/group UI trước khi khóa quyền truy cập.
 - Mutate group chưa invalidation cache `conv_members:*`; socket có thể giữ danh sách member cũ trong 24 giờ.
 - Socket chỉ join room theo `userId`; các event message edit/revoke/react hiện emit theo `conversation_id`, nên client khác không nhận được event đó.
@@ -444,6 +444,8 @@ data: {
 
 ## Phase 12 — Backend sửa đúng semantics ẩn/mở lại direct conversation
 
+**Trạng thái: Đã hoàn thành.**
+
 **Một chức năng:** hide chỉ ảnh hưởng current user và mở lại cũng chỉ unhide current user.
 
 **File tạo mới:** không có.
@@ -463,6 +465,8 @@ data: {
 
 ## Phase 13 — UI “Ẩn khỏi hộp thư của bạn”
 
+**Trạng thái: Đã hoàn thành.**
+
 **Một chức năng:** hide conversation với confirm an toàn.
 
 **File tạo mới:**
@@ -477,11 +481,44 @@ data: {
 
 **Chi tiết:**
 
-1. Copy xác nhận nói rõ lịch sử không bị xóa cho người khác và conversation có thể xuất hiện lại khi nhắn tiếp.
+1. Copy xác nhận nói rõ lịch sử không bị xóa cho người khác; conversation giữ trạng thái ẩn cho tới khi chính người dùng tìm và mở lại.
 2. Thành công: remove item khỏi conversations cache, đóng details, route `/messages`, sau đó invalidate để đồng bộ server.
 3. Lỗi: giữ nguyên route/panel và báo toast; không optimistic navigate trước khi server xác nhận.
 
 **Gate hoàn thành:** không dùng chữ “xóa cho mọi người”; hide đúng một phía; back/forward browser không làm panel stale.
+
+## Phase 13A — Tìm và chủ động mở lại hội thoại đã ẩn
+
+**Trạng thái: Đã hoàn thành.**
+
+**Hai chức năng:** tìm group trong hộp thư; chủ động mở lại direct/group đã ẩn mà không phụ thuộc tin nhắn mới.
+
+**File tạo mới:**
+
+- `X-frontend/src/features/conversations/types/conversation-lookup.type.ts`.
+- `X-frontend/src/features/conversations/hooks/use-inbox-conversation-search.ts`.
+- `X-frontend/src/features/conversations/hooks/use-reopen-conversation.ts`.
+- `X-frontend/src/features/conversations/components/conversation-search-results.tsx`.
+
+**File sửa:**
+
+- `X-ver2/src/config/database.service.ts`, `X-ver2/src/app.ts`: tạo riêng index membership/cursor cho group cùng message indexes, không gọi lại toàn bộ legacy indexes.
+- `X-ver2/src/modules/conversation/dto/index.ts`, `conversation.validator.ts`, `conversation.service.ts`, `conversation.controller.ts`, `conversation.route.ts`.
+- `X-ver2/endpoint.md`, `X-ver2/swagger.yaml`.
+- `X-frontend/src/features/conversations/api/conversations.api.ts`.
+- `X-frontend/src/features/conversations/hooks/use-create-conversation.ts`.
+- `X-frontend/src/features/conversations/components/conversation-sidebar.tsx`, `hide-conversation-dialog.tsx`.
+- `X-frontend/input-ui-chat.md`, `X-frontend/phase-ui-chat.md`.
+
+**Chi tiết:**
+
+1. `GET /conversations/groups/search` nhận `q/cursor/limit`, chỉ tìm group mà current user còn là member và vẫn trả group đang có current user trong `hidden_by`; query được escape, debounce và phân trang giới hạn.
+2. `POST /conversations/:conversation_id/unhide` membership-protect, idempotent và chỉ `$pull` current user khỏi direct/group; không reset `hidden_by` của người khác.
+3. Ô sidebar đổi thành “Search people and groups”: section People dùng following hiện có; section Groups dùng endpoint mới, có loading/error/empty/load-more riêng và không request group khi query rỗng.
+4. Chọn person tiếp tục dùng `POST /direct/:receiver_id`; chọn group gọi unhide. Chỉ sau response thành công mới invalidate conversations, xóa query và route tới `/messages/:id`; lỗi giữ nguyên search để retry.
+5. Socket send/receive không sửa `hidden_by`; tin nhắn mới không tự làm hội thoại xuất hiện lại. Copy hide nói rõ user phải chủ động tìm và mở lại.
+
+**Gate hoàn thành:** A/B hoặc thành viên group gửi mới không làm conversation tự hiện lại; A tìm/chọn lại chỉ unhide A; group ngoài membership không xuất hiện; group đã ẩn tìm và mở lại được; query rỗng không gọi group search; lỗi unhide không điều hướng.
 
 ## Phase 14 — Backend thực thi block trong direct messaging
 
@@ -696,6 +733,7 @@ data: {
 | 10 Shared media          | Phase 1–2                                                    | Membership và `medias_info`                                               |
 | 11 Create group          | API hiện có; Phase 16 cần xong trước khi mở quản trị member  | Group create chỉ cần POST hiện tại                                        |
 | 13 Hide                  | Phase 12                                                     | Tránh làm lộ bug reset `hidden_by` của người còn lại                      |
+| 13A Reopen hidden        | Phase 12–13                                                  | Chỉ current user được mở lại; tin nhắn mới không tự unhide                |
 | 15 Block                 | Phase 14                                                     | Nút block phải có tác dụng thật với socket                                |
 | 17–20 Group admin        | Phase 16                                                     | Quyền, cache member và realtime phải an toàn                              |
 
@@ -716,7 +754,7 @@ Không cần chờ toàn bộ Phase 1–21 mới có giá trị. Chia release th
 1. **Release A — an toàn + panel nền:** Phase 1–4. Chỉ mở toggle/overview sau khi backend access gate pass.
 2. **Release B — tiện ích ít rủi ro:** Phase 5–7. Pin, mute và search list.
 3. **Release C — điều hướng/media nâng cao:** Phase 8–10. Context, jump-to-message và shared media.
-4. **Release D — direct actions:** Phase 11–15. Create group, hide, block.
+4. **Release D — direct actions:** Phase 11–15, bao gồm Phase 13A. Create group, hide, chủ động mở lại và block.
 5. **Release E — group management:** Phase 16–20.
 6. **Release final:** Phase 21.
 
