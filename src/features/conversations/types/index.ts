@@ -30,17 +30,29 @@ export interface Reaction {
   user_id: string;
 }
 
+export type MessageReplyMediaType = 'image' | 'video' | 'audio';
+
+export interface MessageReplyPreview {
+  _id: string;
+  sender_info: UserPreview | null;
+  content: string;
+  media_type?: MessageReplyMediaType;
+  status: 'sent' | 'revoked';
+}
+
 export interface Message {
   _id: string;
   conversation_id: string;
   conversation_type: ConversationType;
   sender_id: string;
+  sender_info: UserPreview | null;
   content: string;
   media_ids: string[];
   medias_info?: MediaMetadata[];
   send_at: string;
   read_by: string[];
   reply_to_message_id?: string;
+  reply_to: MessageReplyPreview | null;
   status: 'sent' | 'revoked' | 'deleted';
   reactions: Reaction[];
   is_forwarded?: boolean;

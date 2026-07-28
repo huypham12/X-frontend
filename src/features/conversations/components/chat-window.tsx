@@ -13,6 +13,7 @@ import { FriendPresenceDot } from '@/features/users/components/friend-presence-d
 import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import { ConversationDetailsMobile } from './conversation-details-mobile';
 import { useConversationPartnerProfile } from '../hooks/use-conversation-partner-profile';
+import { useMessageComposerStore } from '../stores/message-composer.store';
 
 interface ChatWindowProps {
   conversationId: string;
@@ -27,6 +28,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
   const toggleDetails = useConversationDetailsStore((state) => state.toggleDetails);
   const closeDetails = useConversationDetailsStore((state) => state.closeDetails);
   const prefersReducedMotion = useReducedMotion();
+  const clearReply = useMessageComposerStore((state) => state.clearReply);
   const conversation = conversations?.find((item) => item._id === conversationId);
   const partnerUsername =
     conversation?.type === 'direct' ? conversation.partner_info?.username : undefined;
@@ -44,6 +46,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
       closeDetails();
     }
   }, [closeDetails, conversationId, openConversationId]);
+
+  useEffect(() => {
+    clearReply();
+    return clearReply;
+  }, [clearReply, conversationId]);
 
   if (!conversation) {
     if (isError) {

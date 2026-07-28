@@ -15,6 +15,7 @@ import type { CreateGroupPayload, CreatedGroupConversation } from '../types/crea
 import type { GroupConversationLookupPage } from '../types/conversation-lookup.type';
 import type { UpdateGroupPayload } from '../types/group-action.type';
 import type { GroupMemberDetails } from '../types/group-member.type';
+import type { MessageActionResult } from '../types/message-action.type';
 
 export const conversationsApi = {
   getConversations: async (): Promise<Conversation[]> => {
@@ -185,6 +186,11 @@ export const conversationsApi = {
 
   leaveGroup: async (conversationId: string): Promise<ConversationActionResult> => {
     const response = await apiClient.delete(`/conversations/${conversationId}/leave`);
+    return response.data.data;
+  },
+
+  revokeMessage: async (messageId: string): Promise<MessageActionResult> => {
+    const response = await apiClient.post(`/conversations/messages/${messageId}/revoke`);
     return response.data.data;
   },
 };

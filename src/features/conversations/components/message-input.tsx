@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Image as ImageIcon, Smile } from 'lucide-react';
+import { Send, Image as ImageIcon, Smile, X } from 'lucide-react';
 import { useChatSocket } from '../hooks/use-chat-socket';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import { useMediaUpload } from '@/features/media/hooks/useMediaUpload';
 import { MediaPreviewGrid } from '@/features/media/components/MediaPreviewGrid';
 import { MediaUploadButton } from '@/features/media/components/MediaUploadButton';
+import { useMessageComposerStore } from '../stores/message-composer.store';
+import { MessageReplyPreview } from './message-reply-preview';
 
 interface MessageInputProps {
   conversationId: string;
@@ -30,6 +32,10 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [isSending, setIsSending] = useState(false);
   const { sendMessage, emitTyping } = useChatSocket(conversationId, partnerUsername);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const replyConversationId = useMessageComposerStore((state) => state.conversationId);
+  const storedReplyTo = useMessageComposerStore((state) => state.replyTo);
+  const clearReply = useMessageComposerStore((state) => state.clearReply);
+  const replyTo = replyConversationId === conversationId ? storedReplyTo : null;
 
   const {
     mediaItems,
@@ -74,6 +80,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       conversation_type: conversationType,
       content: content.trim(),
       media_ids: readyMediaIds,
+      ...(replyTo ? { reply_to_message_id: replyTo._id } : {}),
     });
     setIsSending(false);
 
@@ -81,6 +88,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     
     setContent('');
     clearMedia();
+    clearReply();
     emitTyping({ conversation_id: conversationId, conversation_type: conversationType, isTyping: false });
   };
 
@@ -126,6 +134,23 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   return (
     <div className="relative z-20 shrink-0 border-t border-[#2f3336] bg-black p-4">
+      {replyTo && (
+        <div className="mb-3 flex items-start gap-2">
+          <MessageReplyPreview
+            reply={replyTo}
+            targetMessageId={replyTo._id}
+            variant="composer"
+          />
+          <button
+            type="button"
+            onClick={clearReply}
+            aria-label="Cancel reply"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors duration-200 hover:bg-[#181818] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      )}
       {hasPreviewContent && (
         <div className="custom-scrollbar max-h-[40dvh] overflow-y-auto overscroll-contain pb-3">
           <MediaPreviewGrid
@@ -195,6 +220,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         </div>
         
         <input
+          id={`message-input-${conversationId}`}
           type="text"
           value={content}
           onChange={handleChange}

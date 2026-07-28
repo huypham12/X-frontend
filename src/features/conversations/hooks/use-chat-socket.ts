@@ -6,6 +6,12 @@ import type { Conversation, Message, MessageType, PaginationResponse } from '../
 import { CONVERSATIONS_QUERY_KEY } from './use-conversations';
 import { MESSAGES_QUERY_KEY } from './use-messages';
 import { conversationPartnerProfileQueryKey } from './use-conversation-partner-profile';
+import type { MessageRevokedEvent } from '../types/message-action.type';
+import {
+  refreshRevokedMessageQueries,
+  syncRevokedMessageCaches,
+} from './use-message-actions';
+import { useMessageComposerStore } from '../stores/message-composer.store';
 
 interface ConversationSocketError {
   code?: string;
@@ -101,12 +107,20 @@ export const useChatSocket = (conversationId?: string, partnerUsername?: string)
       }
     };
 
+    const handleMessageRevoked = (event: MessageRevokedEvent) => {
+      syncRevokedMessageCaches(queryClient, event);
+      useMessageComposerStore.getState().clearReplyToMessage(event.message_id);
+      void refreshRevokedMessageQueries(queryClient, event.conversation_id);
+    };
+
     socket.on('@conversation:receive', handleReceiveMessage);
     socket.on('@conversation:error', handleConversationError);
+    socket.on('@message:revoked', handleMessageRevoked);
 
     return () => {
       socket.off('@conversation:receive', handleReceiveMessage);
       socket.off('@conversation:error', handleConversationError);
+      socket.off('@message:revoked', handleMessageRevoked);
     };
   }, [socket, isConnected, queryClient, conversationId, partnerUsername]);
 

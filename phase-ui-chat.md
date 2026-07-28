@@ -749,6 +749,8 @@ data: {
 
 ## Phase 21 — Release audit, accessibility và tài liệu
 
+**Trạng thái: Đã hoàn thành.**
+
 **Chức năng:** không mở thêm feature; khóa chất lượng toàn bộ luồng.
 
 **File tạo mới:** không có mặc định. Chỉ thêm test files nếu repo đã có runner hoặc người dùng cho phép cài/thiết lập test framework.

@@ -2,13 +2,16 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useMessages } from '../hooks/use-messages';
-import { MessageBubble } from './message-bubble';
+import { MessageRow } from './message-row';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useInView } from 'react-intersection-observer';
 import { ArrowDown, RotateCcw } from 'lucide-react';
 import { useReducedMotion } from 'framer-motion';
 import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import { useMessageContext } from '../hooks/use-message-context';
+import { useMessageActions } from '../hooks/use-message-actions';
+import { RevokeMessageDialog } from './revoke-message-dialog';
+import type { Message } from '../types';
 
 interface MessageListProps {
   conversationId: string;
@@ -46,6 +49,8 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
   } = useMessageContext(conversationId, targetMessageId);
   const prefersReducedMotion = useReducedMotion();
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [messageToRevoke, setMessageToRevoke] = useState<Message | null>(null);
+  const { isRevokePending, pendingMessageId, revokeMessage } = useMessageActions(conversationId);
   const messageListRef = useRef<HTMLDivElement>(null);
   const hasInitiallyScrolledRef = useRef(false);
   const isNearBottomRef = useRef(true);
@@ -160,7 +165,8 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
   const displayedMessages = targetMessageId ? contextData?.messages || [] : allMessages;
 
   return (
-    <div
+    <>
+      <div
       ref={messageListRef}
       onScroll={(event) => {
         const messageList = event.currentTarget;
@@ -217,18 +223,36 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
               <p className="text-sm">Send a message to start the conversation.</p>
             </div>
           ) : (
-            displayedMessages.map((message) => (
-              <MessageBubble
-                key={message._id}
-                message={message}
-                isMine={message.sender_id === user?._id}
-                isHighlighted={message._id === highlightedMessageId}
-              />
-            ))
+            displayedMessages.map((message, index) => {
+              const previousMessage = displayedMessages[index - 1];
+              const nextMessage = displayedMessages[index + 1];
+
+              return (
+                <MessageRow
+                  key={message._id}
+                  message={message}
+                  isMine={message.sender_id === user?._id}
+                  isFirstInCluster={previousMessage?.sender_id !== message.sender_id}
+                  isLastInCluster={nextMessage?.sender_id !== message.sender_id}
+                  isHighlighted={message._id === highlightedMessageId}
+                  isRevokePending={isRevokePending && pendingMessageId === message._id}
+                  onRequestRevoke={setMessageToRevoke}
+                />
+              );
+            })
           )}
           <div className="h-1" />
         </>
       )}
-    </div>
+      </div>
+      <RevokeMessageDialog
+        message={messageToRevoke}
+        isPending={isRevokePending}
+        onOpenChange={(open) => {
+          if (!open) setMessageToRevoke(null);
+        }}
+        onConfirm={revokeMessage}
+      />
+    </>
   );
 };
