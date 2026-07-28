@@ -13,6 +13,9 @@ import type { Message, PaginationResponse } from '../types';
 import type { MessageContextData } from '../types/message-search.type';
 import type {
   MessageDeletedForMeEvent,
+  MessageReactionEmoji,
+  MessageReactionState,
+  MessageReactionUpdatedEvent,
   MessageRevokedEvent,
 } from '../types/message-action.type';
 import { MESSAGES_QUERY_KEY } from './use-messages';
@@ -24,6 +27,15 @@ import { useMessageComposerStore } from '../stores/message-composer.store';
 interface ApiErrorBody {
   message?: string;
 }
+
+interface ReactionMutationVariables {
+  messageId: string;
+  emoji: MessageReactionEmoji;
+  currentReaction?: MessageReactionEmoji;
+}
+
+export const MESSAGE_REACTION_DETAILS_QUERY_KEY = (messageId: string) =>
+  ['message-reaction-details', messageId] as const;
 
 const toRevokedTombstone = (message: Message): Message => ({
   ...message,
@@ -199,6 +211,86 @@ export const refreshDeletedMessageQueries = async (
   ]);
 };
 
+const patchMessageReactions = (
+  message: Message,
+  messageId: string,
+  state: MessageReactionState,
+): Message =>
+  message._id === messageId ? { ...message, reactions: state.reactions } : message;
+
+const patchReactionInfiniteData = (
+  data: InfiniteData<PaginationResponse<Message>> | undefined,
+  event: MessageReactionUpdatedEvent,
+) => {
+  if (!data) return data;
+
+  return {
+    ...data,
+    pages: data.pages.map((page) => ({
+      ...page,
+      messages: page.messages.map((message) =>
+        patchMessageReactions(message, event.message_id, event),
+      ),
+    })),
+  };
+};
+
+export const syncReactionUpdatedCaches = (
+  queryClient: QueryClient,
+  event: MessageReactionUpdatedEvent,
+) => {
+  queryClient.setQueryData<InfiniteData<PaginationResponse<Message>>>(
+    MESSAGES_QUERY_KEY(event.conversation_id),
+    (data) => patchReactionInfiniteData(data, event),
+  );
+  queryClient.setQueriesData<MessageContextData>(
+    { queryKey: ['conversation-message-context', event.conversation_id] },
+    (data) =>
+      data
+        ? {
+            ...data,
+            messages: data.messages.map((message) =>
+              patchMessageReactions(message, event.message_id, event),
+            ),
+          }
+        : data,
+  );
+  queryClient.setQueriesData<InfiniteData<PaginationResponse<Message>>>(
+    { queryKey: ['conversation-message-search', event.conversation_id] },
+    (data) => patchReactionInfiniteData(data, event),
+  );
+  queryClient.setQueryData<InfiniteData<PaginationResponse<Message>>>(
+    ['conversation-media', event.conversation_id],
+    (data) => patchReactionInfiniteData(data, event),
+  );
+};
+
+export const refreshReactionQueries = async (
+  queryClient: QueryClient,
+  conversationId: string,
+  messageId: string,
+) => {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: MESSAGES_QUERY_KEY(conversationId) }),
+    queryClient.invalidateQueries({
+      queryKey: ['conversation-message-context', conversationId],
+      refetchType: 'active',
+    }),
+    queryClient.invalidateQueries({
+      queryKey: ['conversation-message-search', conversationId],
+      refetchType: 'active',
+    }),
+    queryClient.invalidateQueries({
+      queryKey: ['conversation-media', conversationId],
+      refetchType: 'active',
+    }),
+    queryClient.invalidateQueries({
+      queryKey: MESSAGE_REACTION_DETAILS_QUERY_KEY(messageId),
+      refetchType: 'active',
+    }),
+  ]);
+};
+
 const getErrorMessage = (error: unknown, fallbackMessage: string) => {
   if (axios.isAxiosError<ApiErrorBody>(error)) {
     return error.response?.data?.message || fallbackMessage;
@@ -237,6 +329,27 @@ export const useMessageActions = (conversationId: string) => {
       toast.error(getErrorMessage(error, 'Could not delete this message.'));
     },
   });
+  const reactionMutation = useMutation({
+    mutationFn: ({ messageId, emoji, currentReaction }: ReactionMutationVariables) =>
+      currentReaction === emoji
+        ? conversationsApi.unreactMessage(messageId)
+        : conversationsApi.reactMessage(messageId, emoji),
+    onSuccess: async (state, { messageId }) => {
+      syncReactionUpdatedCaches(queryClient, {
+        conversation_id: conversationId,
+        message_id: messageId,
+        ...state,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: MESSAGE_REACTION_DETAILS_QUERY_KEY(messageId),
+        refetchType: 'active',
+      });
+    },
+    onError: async (error, { messageId }) => {
+      toast.error(getErrorMessage(error, 'Could not update this reaction.'));
+      await refreshReactionQueries(queryClient, conversationId, messageId);
+    },
+  });
 
   const revokeMessage = async (messageId: string) => {
     try {
@@ -256,6 +369,21 @@ export const useMessageActions = (conversationId: string) => {
     }
   };
 
+  const toggleReaction = async (
+    messageId: string,
+    emoji: MessageReactionEmoji,
+    currentReaction?: MessageReactionEmoji,
+  ) => {
+    if (reactionMutation.isPending) return false;
+
+    try {
+      await reactionMutation.mutateAsync({ messageId, emoji, currentReaction });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   return {
     isRevokePending: revokeMutation.isPending,
     revokePendingMessageId: revokeMutation.variables,
@@ -263,5 +391,8 @@ export const useMessageActions = (conversationId: string) => {
     isDeletePending: deleteMutation.isPending,
     deletePendingMessageId: deleteMutation.variables,
     deleteMessage,
+    isReactionPending: reactionMutation.isPending,
+    reactionPendingMessageId: reactionMutation.variables?.messageId,
+    toggleReaction,
   };
 };

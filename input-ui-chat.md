@@ -165,9 +165,9 @@ Nếu biết một `conversation_id`, một user đã đăng nhập có thể tr
 Ngoài ra:
 
 - Thay đổi thành viên group chưa xóa cache `conv_members:*`; cache hiện tồn tại 24 giờ. Người bị xóa có thể tiếp tục nhận/gửi message trong thời gian cache còn hiệu lực.
-- Các sự kiện edit/revoke/react đang emit vào room theo `conversation_id`, nhưng socket chỉ join room theo `userId`. Người còn lại có thể không nhận cập nhật realtime.
+- Sự kiện edit legacy vẫn emit theo room `conversation_id`; revoke và reaction đã được chuyển sang personal rooms của member để đồng bộ đúng nhiều tab/device.
 - Đã xử lý ở Phase 9: search/media dùng cùng visibility policy với message list, không trả message revoked/deleted không hợp lệ hoặc message đã delete-for-me với actor.
-- Validator reaction chưa thực sự validate trường `emoji`.
+- Đã xử lý ở Phase 11: reaction body strict chỉ nhận đúng một Unicode emoji; mỗi user tối đa một reaction/message bằng update pipeline nguyên tử.
 - `GET /media/:id` chưa kiểm tra quyền truy cập media thuộc conversation nào.
 
 ## Đề xuất giao diện nút `i`

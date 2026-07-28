@@ -15,7 +15,12 @@ import type { CreateGroupPayload, CreatedGroupConversation } from '../types/crea
 import type { GroupConversationLookupPage } from '../types/conversation-lookup.type';
 import type { UpdateGroupPayload } from '../types/group-action.type';
 import type { GroupMemberDetails } from '../types/group-member.type';
-import type { MessageActionResult } from '../types/message-action.type';
+import type {
+  MessageActionResult,
+  MessageReactionDetail,
+  MessageReactionEmoji,
+  MessageReactionState,
+} from '../types/message-action.type';
 
 export const conversationsApi = {
   getConversations: async (): Promise<Conversation[]> => {
@@ -196,6 +201,26 @@ export const conversationsApi = {
 
   deleteMessage: async (messageId: string): Promise<MessageActionResult> => {
     const response = await apiClient.delete(`/conversations/messages/${messageId}`);
+    return response.data.data;
+  },
+
+  reactMessage: async (
+    messageId: string,
+    emoji: MessageReactionEmoji,
+  ): Promise<MessageReactionState> => {
+    const response = await apiClient.post(`/conversations/messages/${messageId}/react`, {
+      emoji,
+    });
+    return response.data.data;
+  },
+
+  unreactMessage: async (messageId: string): Promise<MessageReactionState> => {
+    const response = await apiClient.delete(`/conversations/messages/${messageId}/react`);
+    return response.data.data;
+  },
+
+  getMessageReactions: async (messageId: string): Promise<MessageReactionDetail[]> => {
+    const response = await apiClient.get(`/conversations/messages/${messageId}/reactions`);
     return response.data.data;
   },
 };

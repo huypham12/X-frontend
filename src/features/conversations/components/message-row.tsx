@@ -2,6 +2,9 @@ import type { Message } from '../types';
 import { MessageBubble } from './message-bubble';
 import { MessageSenderAvatar } from './message-sender-avatar';
 import { MessageActionsMenu } from './message-actions-menu';
+import type { MessageReactionEmoji } from '../types/message-action.type';
+import { getCurrentUserReaction } from './message-reaction-summary';
+import { MessageReactionAction } from './message-reaction-action';
 
 interface MessageRowProps {
   message: Message;
@@ -9,10 +12,17 @@ interface MessageRowProps {
   isFirstInCluster: boolean;
   isLastInCluster: boolean;
   isHighlighted?: boolean;
+  currentUserId?: string;
   isRevokePending?: boolean;
   isDeletePending?: boolean;
+  isReactionPending?: boolean;
   onRequestRevoke?: (message: Message) => void;
   onRequestDelete?: (message: Message) => void;
+  onSelectReaction?: (
+    message: Message,
+    emoji: MessageReactionEmoji,
+    currentReaction?: MessageReactionEmoji,
+  ) => Promise<boolean>;
 }
 
 export const MessageRow = ({
@@ -21,14 +31,18 @@ export const MessageRow = ({
   isFirstInCluster,
   isLastInCluster,
   isHighlighted = false,
+  currentUserId,
   isRevokePending = false,
   isDeletePending = false,
+  isReactionPending = false,
   onRequestRevoke,
   onRequestDelete,
+  onSelectReaction,
 }: MessageRowProps) => {
   const showGroupSenderName =
     !isMine && message.conversation_type === 'group' && isFirstInCluster;
   const senderName = message.sender_info?.name.trim() || 'Unknown sender';
+  const currentReaction = getCurrentUserReaction(message.reactions, currentUserId);
 
   return (
     <div
@@ -65,8 +79,23 @@ export const MessageRow = ({
             isMine={isMine}
             isFirstInCluster={isFirstInCluster}
             isLastInCluster={isLastInCluster}
+            currentUserId={currentUserId}
+            isReactionPending={isReactionPending}
+            onRemoveReaction={
+              currentReaction && onSelectReaction
+                ? () => onSelectReaction(message, currentReaction, currentReaction)
+                : undefined
+            }
           />
         </div>
+        {onSelectReaction && (
+          <MessageReactionAction
+            message={message}
+            currentReaction={currentReaction}
+            isPending={isReactionPending}
+            onSelect={(emoji) => onSelectReaction(message, emoji, currentReaction)}
+          />
+        )}
         <MessageActionsMenu
           message={message}
           isMine={isMine}

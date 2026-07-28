@@ -59,6 +59,9 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
     isDeletePending,
     deletePendingMessageId,
     deleteMessage,
+    isReactionPending,
+    reactionPendingMessageId,
+    toggleReaction,
   } = useMessageActions(conversationId);
   const messageListRef = useRef<HTMLDivElement>(null);
   const hasInitiallyScrolledRef = useRef(false);
@@ -260,14 +263,21 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
                   isFirstInCluster={previousMessage?.sender_id !== message.sender_id}
                   isLastInCluster={nextMessage?.sender_id !== message.sender_id}
                   isHighlighted={message._id === highlightedMessageId}
+                  currentUserId={user?._id}
                   isRevokePending={
                     isRevokePending && revokePendingMessageId === message._id
                   }
                   isDeletePending={
                     isDeletePending && deletePendingMessageId === message._id
                   }
+                  isReactionPending={
+                    isReactionPending && reactionPendingMessageId === message._id
+                  }
                   onRequestRevoke={setMessageToRevoke}
                   onRequestDelete={setMessageToDelete}
+                  onSelectReaction={(selectedMessage, emoji, currentReaction) =>
+                    toggleReaction(selectedMessage._id, emoji, currentReaction)
+                  }
                 />
               );
             })

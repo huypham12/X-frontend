@@ -172,7 +172,7 @@ Mỗi payload tối thiểu có `conversation_id`, `message_id` nếu liên quan
 
 1. Access helper load message một lần, resolve conversation thật từ `conversation_id/conversation_type`, bắt buộc current user là member và hỗ trợ option `requireSender`, `allowedStatuses`.
 2. Revoke/delete/react/unreact/reaction-details đều dùng helper; revoke yêu cầu sender, reaction/delete-for-me yêu cầu member.
-3. Gắn `messageIdParamValidator` cho revoke/delete; sửa reaction validator thành body typed thay vì object rỗng. Emoji allowlist sẽ khóa ở Phase 11.
+3. Gắn `messageIdParamValidator` cho revoke/delete; sửa reaction validator thành body typed thay vì object rỗng. Quy tắc một Unicode emoji hợp lệ được chốt ở Phase 11.
 4. Sync helper xóa `chat:messages:<conversationId>` và emit tới personal rooms lấy từ access service. Có method riêng emit chỉ actor cho state riêng tư.
 5. Không đổi semantics delete/revoke ở phase nền; phase này chỉ đóng lỗ quyền, ID invalid và event/cache stale rõ ràng.
 
@@ -424,7 +424,7 @@ Mỗi payload tối thiểu có `conversation_id`, `message_id` nếu liên quan
 
 ## Phase 11 — Backend reaction nguyên tử và an toàn
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Hai chức năng:** thả/đổi/gỡ reaction; xem người reaction.
 
@@ -440,7 +440,7 @@ Mỗi payload tối thiểu có `conversation_id`, `message_id` nếu liên quan
 
 **Chi tiết:**
 
-1. Chốt allowlist reaction nhỏ, ví dụ `👍 ❤️ 😂 😮 😢 😡`; reject chuỗi rỗng, emoji ngoài danh sách và payload dư.
+1. Backend nhận đúng một Unicode emoji hợp lệ và reject chuỗi rỗng, text thường, nhiều emoji hoặc payload dư; `👍 ❤️ 😂 😮 😢 😡` chỉ là sáu gợi ý nhanh ở frontend.
 2. Chỉ current member, message sent và visible với actor được react/unreact/xem details.
 3. Một user tối đa một reaction/message; đổi reaction bằng một update pipeline nguyên tử, không `$pull`/`$push` tách hai query.
 4. API trả reaction list/summary mới; details chỉ project public identity.
@@ -450,13 +450,14 @@ Mỗi payload tối thiểu có `conversation_id`, `message_id` nếu liên quan
 
 ## Phase 12 — Frontend reaction picker, summary và details
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Hai chức năng:** thả/gỡ reaction; xem chi tiết reaction.
 
 **File tạo mới:**
 
 - `X-frontend/src/features/conversations/components/message-reaction-picker.tsx`.
+- `X-frontend/src/features/conversations/components/message-reaction-action.tsx`.
 - `X-frontend/src/features/conversations/components/message-reaction-summary.tsx`.
 - `X-frontend/src/features/conversations/components/message-reactions-dialog.tsx`.
 
@@ -467,13 +468,15 @@ Mỗi payload tối thiểu có `conversation_id`, `message_id` nếu liên quan
 - `X-frontend/src/features/conversations/hooks/use-message-actions.ts`.
 - `X-frontend/src/features/conversations/components/message-actions-menu.tsx`.
 - `X-frontend/src/features/conversations/components/message-bubble.tsx`.
+- `X-frontend/src/features/conversations/components/message-row.tsx`.
+- `X-frontend/src/features/conversations/components/message-list.tsx`.
 - `X-frontend/src/features/conversations/hooks/use-chat-socket.ts`.
 
 **Chi tiết:**
 
-1. Picker compact dùng allowlist backend; không cần cài package mới hoặc mở full emoji picker của composer.
+1. Reaction là action riêng cạnh menu `...`; picker mở với sáu emoji gợi ý và dấu `+` để mở toàn bộ kho emoji đang dùng ở composer, không cài package mới.
 2. Summary nhóm theo emoji/count, đánh dấu reaction của current user; click mở dialog danh sách user public.
-3. Keyboard arrow/Enter/Escape, focus return và touch target đạt chuẩn; animation 150–250ms, reduced motion tắt scale.
+3. Picker render qua portal và tự giữ trong viewport; keyboard navigation/Enter/Escape, focus return và touch target đạt chuẩn; animation 150–250ms, reduced motion được tôn trọng.
 4. Mutation pending tránh double click; error rollback/refetch, event server là nguồn thật.
 
 **Gate hoàn thành:** react/đổi/gỡ đúng ở direct/group; counts và details đúng nhiều client; revoked/deleted message không còn picker.

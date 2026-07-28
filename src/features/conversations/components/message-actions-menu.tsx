@@ -29,9 +29,12 @@ export const MessageActionsMenu = ({
   const startReply = useMessageComposerStore((state) => state.startReply);
 
   useEffect(() => {
+    if (isOpen) firstActionRef.current?.focus();
+  }, [isOpen]);
+
+  useEffect(() => {
     if (!isOpen) return;
 
-    firstActionRef.current?.focus();
     const handlePointerDown = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setIsOpen(false);
     };
@@ -82,7 +85,7 @@ export const MessageActionsMenu = ({
         <div
           role="menu"
           aria-label="Message actions"
-          className={`absolute bottom-full z-30 mb-1 min-w-36 overflow-hidden rounded-xl border border-[#2f3336] bg-[#181818] p-1 shadow-xl ${
+          className={`absolute bottom-full z-30 mb-1 min-w-40 rounded-xl border border-[#2f3336] bg-[#181818] p-1 shadow-xl ${
             isMine ? 'right-0' : 'left-0'
           }`}
         >
