@@ -51,9 +51,9 @@ Các chức năng dự kiến trong panel:
 - `DELETE /conversations/:id` chỉ thêm current user vào `hidden_by`; nhãn UI đúng phải là **“Ẩn/Xóa khỏi hộp thư của bạn”**, không được mô tả là xóa cho mọi người.
 - Trước Phase 12, `getOrCreateDirectConversation()` reset `hidden_by: []`, có thể làm conversation hiện lại cho cả hai người; hiện đã đổi thành chỉ `$pull` người đang mở lại.
 - Nhiều method nhận `userId` nhưng chưa kiểm tra membership; riêng `getMessages()` còn chưa nhận `userId` từ controller. Không được public search/media/group UI trước khi khóa quyền truy cập.
-- Mutate group chưa invalidation cache `conv_members:*`; socket có thể giữ danh sách member cũ trong 24 giờ.
+- Trước Phase 16, mutate group chưa invalidation cache `conv_members:*`; hiện add/remove/leave đã xóa cache ngay và socket đọc membership trực tiếp từ MongoDB.
 - Socket chỉ join room theo `userId`; các event message edit/revoke/react hiện emit theo `conversation_id`, nên client khác không nhận được event đó.
-- User block hiện chỉ ghi vào collection `userBlocks`; `@conversation:send` chưa kiểm tra block hai chiều. Vì vậy chưa được đưa nút “Block” ra production trước phase gia cố tương ứng.
+- Trước Phase 14, user block chỉ ghi vào collection `userBlocks`; hiện direct create/send/forward và typing đã kiểm tra block hai chiều, còn lịch sử cũ vẫn được giữ.
 - Group schema có `admin_only_messaging` và `last_seen`, nhưng chưa có luồng API hoàn chỉnh. Nickname chỉ có trong tài liệu phác thảo, không có trong direct schema/implementation.
 
 ## 3. Quyết định kiến trúc
@@ -522,15 +522,18 @@ data: {
 
 ## Phase 14 — Backend thực thi block trong direct messaging
 
+**Trạng thái: Đã hoàn thành.**
+
 **Một chức năng:** block thực sự ngăn tạo/gửi direct message mới theo cả hai chiều.
 
-**File tạo mới:** không có nếu helper access Phase 1 đã đủ; nếu logic phình to, tạo `X-ver2/src/modules/conversation/conversation-block.service.ts` thay vì nhét query vào socket handler.
+**File tạo mới:** không có; dùng helper access chung của Phase 1.
 
 **File sửa:**
 
 - `X-ver2/src/modules/conversation/conversation-access.service.ts`.
 - `X-ver2/src/modules/conversation/conversation.service.ts`.
 - `X-ver2/src/socket/chat.handler.ts`.
+- `X-ver2/src/config/database.service.ts` và `X-ver2/src/modules/user/user.service.ts`.
 - `X-ver2/endpoint.md`, `X-ver2/swagger.yaml`.
 
 **Chi tiết:**
@@ -538,11 +541,14 @@ data: {
 1. Khi direct `@conversation:send`, kiểm tra block A→B hoặc B→A; nếu có, từ chối trước khi insert MongoDB/update Redis/notification.
 2. `getOrCreateDirectConversation` không tạo/mở direct mới khi đang có block hai chiều.
 3. Giữ quyền xem lịch sử cũ trừ khi product quyết định khác; không tự xóa message.
-4. Socket error cần có code ổn định (ví dụ `DIRECT_MESSAGE_BLOCKED`) để frontend không phải parse chuỗi; đây là bổ sung có kiểm soát và phải ghi docs.
+4. Socket error có code ổn định `DIRECT_MESSAGE_BLOCKED`; acknowledgement trả success/error để frontend chỉ xóa draft/media sau khi server xác nhận.
+5. Bootstrap unique index cho cặp user/block, dọn bản ghi trùng legacy trước khi tạo index; block dùng atomic upsert và unblock xóa toàn bộ bản ghi của đúng cặp.
 
 **Gate hoàn thành:** cả người block và bị block đều không gửi được; không có message/notification/cache entry mới; unblock khôi phục gửi tin.
 
 ## Phase 15 — Profile và block/unblock trong details
+
+**Trạng thái: Đã hoàn thành.**
 
 **Hai chức năng:** mở profile; block/unblock direct partner.
 
@@ -550,25 +556,31 @@ data: {
 
 - `X-frontend/src/features/conversations/hooks/use-conversation-partner-profile.ts`.
 - `X-frontend/src/features/conversations/components/block-user-dialog.tsx`.
+- `X-frontend/src/features/conversations/components/conversation-block-action.tsx`.
 
 **File sửa:**
 
-- `X-frontend/src/features/users/types/user.type.ts`: bổ sung profile type có `is_blocked`, không dùng `any`.
+- `X-frontend/src/features/users/types/user.type.ts`: bổ sung profile type có `is_blocked` và `is_blocked_by_user`, không dùng `any`.
 - `X-frontend/src/features/users/api/user.service.ts`: giữ tương thích response array hiện tại và type rõ.
 - `X-frontend/src/features/conversations/components/conversation-details-overview.tsx`.
 - `X-frontend/src/features/conversations/components/chat-window.tsx` và `message-input.tsx`: khi profile query xác nhận block, disable composer với lý do rõ.
 - `X-frontend/src/features/conversations/hooks/use-chat-socket.ts`: map socket error code Phase 14 thành toast/state phù hợp, không dùng `console.log`.
+- `X-frontend/src/providers/socket-provider.tsx` và `src/features/tweets/components/tweet-menu.tsx`: invalidate profile query sau thay đổi block cục bộ hoặc realtime.
+- `X-ver2/src/modules/user/user.service.ts`, `user.dto.ts`: trả trạng thái block hai chiều và phát event đồng bộ cho cả hai user.
 
 **Chi tiết:**
 
-1. Link profile dùng username đã có; profile query cung cấp `is_blocked` làm server state duy nhất.
+1. Link profile dùng username đã có; profile query cung cấp `is_blocked` và `is_blocked_by_user` làm server state có thẩm quyền cho hai chiều.
 2. Block cần confirm và giải thích sẽ ngăn direct message mới, không xóa lịch sử.
-3. Thành công invalidate `['user', username]` và partner-profile query; không tự giả block state lâu dài.
+3. Thành công và event `@user:block-status-changed` invalidate profile query; không tự giả block state lâu dài. Khi query lỗi hoặc đang refetch, composer fail-closed và có thể retry.
 4. Group không render block action ở overview vì block từng member là luồng khác và dễ gây nhầm.
+5. Draft text/media được giữ nếu socket disconnect, timeout hoặc server từ chối; chỉ xóa sau acknowledgement thành công.
 
 **Gate hoàn thành:** block/unblock label đúng sau reload; composer disabled đúng hai chiều theo response/socket; profile navigation hoạt động.
 
 ## Phase 16 — Backend hardening group member và realtime invalidation
+
+**Trạng thái: Đã hoàn thành.**
 
 **Hai chức năng:** siết quyền group; đồng bộ cache/event sau member mutation.
 
@@ -579,21 +591,25 @@ data: {
 - `X-ver2/src/modules/conversation/conversation-access.service.ts`.
 - `X-ver2/src/modules/conversation/conversation.service.ts`.
 - `X-ver2/src/modules/conversation/conversation.validator.ts`.
-- `X-ver2/src/socket/chat.handler.ts` hoặc helper emit chung trong module conversation.
+- `X-ver2/src/modules/conversation/conversation.route.ts`.
+- Helper emit chung trong `X-ver2/src/modules/conversation/conversation.service.ts`.
 - `X-ver2/endpoint.md`, `X-ver2/swagger.yaml`.
 
 **Chi tiết:**
 
-1. View members/leave: member hợp lệ; update group/add/remove member: admin hợp lệ.
-2. Add member so sánh theo `user_id`, không dùng `$addToSet` cả object có `joined_at` vì cách đó vẫn có thể tạo duplicate.
+1. View members/leave: member hợp lệ; update group/remove member: admin hợp lệ. Add ban đầu khóa admin ở Phase 16 và được Phase 19A chủ động thay bằng membership + following rule.
+2. Add member dùng một update pipeline nguyên tử cho toàn bộ request, so sánh theo `user_id`; không dùng `$addToSet` cả object có `joined_at` vì cách đó vẫn có thể tạo duplicate.
 3. Remove không cho admin xóa chính mình qua endpoint remove; leave dùng endpoint riêng.
-4. Sole admin không được leave nếu vẫn còn member và chưa có cơ chế chuyển admin; trả code lỗi rõ, không để group mồ côi quyền quản trị.
+4. Sole admin không được leave nếu vẫn còn member và chưa có cơ chế chuyển admin; HTTP response trả `code` riêng, không để frontend parse message hoặc để group mồ côi quyền quản trị.
 5. Sau add/remove/leave, delete `conv_members:<conversationId>` ngay.
-6. Emit event tới personal rooms của member liên quan, không emit theo room conversation mà socket chưa join. Frontend về sau chỉ cần invalidate conversation/member query.
+6. Emit `@conversation:group-updated` tới personal rooms của member cũ/mới liên quan, không emit theo room conversation mà socket chưa join. Frontend về sau chỉ cần invalidate conversation/member query.
+7. Group socket send kiểm tra lại membership ngay trước insert và tải lại recipients trước broadcast/notification; forward kiểm tra lại source/target ngay trước khi ghi.
 
-**Gate hoàn thành:** member thường không edit/add/remove; duplicate không sinh ra; user bị remove không gửi/nhận message sau mutation; nhiều client thấy thay đổi sau event/refetch.
+**Gate hoàn thành:** member thường không edit/remove; add tuân theo quyền hiện hành của Phase 19A; duplicate không sinh ra; user bị remove không gửi/nhận message sau mutation; nhiều client thấy thay đổi sau event/refetch.
 
 ## Phase 17 — Đổi tên và avatar group
+
+**Trạng thái: Đã hoàn thành.**
 
 **Hai chức năng:** rename group; đổi group avatar.
 
@@ -601,24 +617,28 @@ data: {
 
 - `X-frontend/src/features/conversations/components/edit-group-dialog.tsx`.
 - `X-frontend/src/features/conversations/hooks/use-group-actions.ts`.
+- `X-frontend/src/features/conversations/hooks/use-conversation-socket-sync.ts`.
 - `X-frontend/src/features/conversations/types/group-action.type.ts`.
 
 **File sửa:**
 
 - `X-frontend/src/features/conversations/api/conversations.api.ts`.
 - `X-frontend/src/features/conversations/components/conversation-details-overview.tsx`.
-- `X-frontend/src/features/conversations/hooks/use-chat-socket.ts` để invalidate khi nhận group-updated event Phase 16.
+- `X-frontend/src/providers/socket-provider.tsx` và `use-chat-socket.ts` để group-updated chỉ có một listener toàn cục, kể cả khi chưa mở một conversation.
+- `X-ver2/src/modules/conversation/conversation.service.ts`, `conversation.validator.ts` và `swagger.yaml` để chuẩn hóa/validate tên group 1–100 ký tự ở backend.
 
 **Chi tiết:**
 
 1. Chỉ admin thấy action; không chỉ dựa UI, backend Phase 16 vẫn quyết định quyền.
-2. Name validate 1–100. Avatar dùng `mediaService.uploadImage`, lấy URL ready rồi PATCH; không tạo upload flow mới.
+2. Name validate 1–100. Avatar có preview local, dùng `mediaService.uploadImage`, lấy URL ready rồi PATCH; không tạo upload flow mới.
 3. Nếu upload thành công nhưng PATCH fail, thông báo rõ và cho retry PATCH; không xóa media ngoài ý người dùng.
 4. Success cập nhật/invalidate conversation cache để header chat, panel và sidebar đổi đồng thời.
 
 **Gate hoàn thành:** member không thấy/không gọi được edit; name/avatar đồng bộ trên hai client; upload/PATCH failure có đường retry.
 
 ## Phase 18 — Danh sách thành viên group
+
+**Trạng thái: Đã hoàn thành.**
 
 **Một chức năng:** xem member và role.
 
@@ -631,26 +651,32 @@ data: {
 **File sửa:**
 
 - `X-frontend/src/features/conversations/api/conversations.api.ts`.
-- `X-frontend/src/features/conversations/stores/conversation-details.store.ts`.
+- `X-frontend/src/features/conversations/stores/conversation-details.store.ts`: view `members` đã được chuẩn bị từ phase trước nên không cần sửa thêm.
 - `X-frontend/src/features/conversations/components/conversation-details-panel.tsx`.
 - `X-frontend/src/features/conversations/components/conversation-details-overview.tsx`.
+- `X-ver2/src/modules/conversation/conversation.service.ts` để response member chỉ chứa public identity fields cần cho UI.
 
 **Chi tiết:**
 
-1. Type phải phản ánh response aggregate thật: role, joined_at và `user`; không ép dùng `GroupMember` summary nếu shape khác.
+1. Type phải phản ánh response aggregate thật: role, joined_at và `user`; backend chỉ trả `_id`, name, username, avatar trong `user`, không ép dùng `GroupMember` summary nếu shape khác.
 2. Hiển thị admin trước, sau đó member; avatar/name/username link profile; có skeleton/error/retry/empty bất thường.
-3. Event group-member-changed chỉ invalidate `['conversation-members', id]` và conversations query.
+3. Event `@conversation:group-updated` chỉ invalidate `['conversation-members', id]` và conversations query.
 
 **Gate hoàn thành:** admin/member label đúng, profile link đúng, user ngoài group nhận 403, danh sách cập nhật sau add/remove/leave.
 
 ## Phase 19 — Thêm và xóa thành viên group
 
+**Trạng thái: Đã hoàn thành.**
+
 **Hai chức năng:** admin thêm member; admin remove member.
+
+**Ghi chú:** quyền add và nguồn candidate của implementation này được Phase 19A bên dưới thay thế; admin-only remove được giữ nguyên.
 
 **File tạo mới:**
 
 - `X-frontend/src/features/conversations/components/add-group-members-dialog.tsx`.
 - `X-frontend/src/features/conversations/components/remove-group-member-dialog.tsx`.
+- `X-frontend/src/features/search/types/search-user.type.ts`.
 
 **File sửa:**
 
@@ -668,7 +694,38 @@ data: {
 
 **Gate hoàn thành:** duplicate không xuất hiện, member thường không có controls, remove sai quyền rollback/giữ list, người bị remove mất quyền socket ngay.
 
+## Phase 19A — Mở quyền add member và dùng nguồn following
+
+**Trạng thái: Đã hoàn thành.**
+
+**Một điều chỉnh chức năng:** mọi member hiện tại được thêm người họ đang follow; remove member vẫn chỉ dành cho admin.
+
+**File tạo mới:** không có.
+
+**File sửa:**
+
+- `X-frontend/src/features/conversations/hooks/use-group-actions.ts`.
+- `X-frontend/src/features/conversations/components/add-group-members-dialog.tsx`.
+- `X-frontend/src/features/conversations/components/group-members-view.tsx`.
+- `X-ver2/src/modules/conversation/conversation.service.ts`.
+- `X-ver2/src/config/database.service.ts`.
+- `X-ver2/endpoint.md`, `X-ver2/swagger.yaml`.
+- `X-frontend/input-ui-chat.md`.
+
+**Chi tiết:**
+
+1. Người mở picker thấy ngay toàn bộ following của chính họ; search chỉ lọc cục bộ, không tìm toàn hệ thống và không cần nhập mới có kết quả.
+2. Loại current user/current members, deduplicate theo user id; empty/loading/error/retry phải rõ ràng.
+3. Frontend hiện Add cho mọi member, nhưng remove controls vẫn chỉ admin; backend add dùng membership authorization, remove không đổi quyền.
+4. Backend xác minh toàn bộ user được yêu cầu đều nằm trong following của actor trước atomic group update; không chỉ dựa vào candidate list phía client.
+5. Event `members_added` tiếp tục chỉ đồng bộ cache/realtime. System message kiểu “A added B/B joined” và notification được hoãn sang phase riêng, không chèn message giả trong Phase 19A.
+6. Bootstrap followers deduplicate theo cặp `follow_user_id` + `followed_user_id`, tạo unique index đúng schema rồi gỡ index legacy dùng nhầm `user_id`; bản ghi thiếu field hợp lệ không được xóa ngầm.
+
+**Gate hoàn thành:** member thường add được người mình follow; dialog có candidate ngay khi mở; user không được follow bị backend từ chối; admin-only remove không đổi; bootstrap không còn lỗi duplicate key do index `user_id` sai; không tạo notification/system message trong phase này.
+
 ## Phase 20 — Rời group
+
+**Trạng thái: Đã hoàn thành.**
 
 **Một chức năng:** current user rời group.
 

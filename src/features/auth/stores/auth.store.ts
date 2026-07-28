@@ -11,6 +11,9 @@ export interface User {
   cover_photo?: string;
   bio?: string;
   verify: number;
+  tweet_count?: number;
+  follower_count?: number;
+  following_count?: number;
 }
 
 interface AuthState {

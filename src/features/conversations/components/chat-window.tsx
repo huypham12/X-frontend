@@ -12,6 +12,7 @@ import { useFriendPresence } from '@/features/users/hooks/use-friend-presence';
 import { FriendPresenceDot } from '@/features/users/components/friend-presence-dot';
 import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import { ConversationDetailsMobile } from './conversation-details-mobile';
+import { useConversationPartnerProfile } from '../hooks/use-conversation-partner-profile';
 
 interface ChatWindowProps {
   conversationId: string;
@@ -27,6 +28,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
   const closeDetails = useConversationDetailsStore((state) => state.closeDetails);
   const prefersReducedMotion = useReducedMotion();
   const conversation = conversations?.find((item) => item._id === conversationId);
+  const partnerUsername =
+    conversation?.type === 'direct' ? conversation.partner_info?.username : undefined;
+  const {
+    data: partnerProfile,
+    isLoading: isPartnerProfileLoading,
+    isFetching: isPartnerProfileFetching,
+    isError: isPartnerProfileError,
+    refetch: refetchPartnerProfile,
+  } = useConversationPartnerProfile(partnerUsername);
   const isDetailsOpen = openConversationId === conversationId;
 
   useEffect(() => {
@@ -79,6 +89,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
     title = conversation.name || 'Group Chat';
     avatar = conversation.avatar_url || '/default-group.png';
   }
+
+  const messagingDisabledReason = partnerProfile?.is_blocked
+    ? 'You blocked this user. Unblock them in Conversation details to send messages.'
+    : partnerProfile?.is_blocked_by_user
+      ? 'You cannot send direct messages to this user.'
+      : conversation.type === 'direct' && (!partnerUsername || isPartnerProfileError)
+        ? 'Could not verify whether direct messaging is available.'
+      : undefined;
 
   const headerIdentity = (
     <>
@@ -143,7 +161,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
       {/* Input */}
       <MessageInput 
         conversationId={conversationId} 
-        conversationType={conversation.type} 
+        conversationType={conversation.type}
+        partnerUsername={partnerUsername}
+        disabledReason={messagingDisabledReason}
+        isMessagingAvailabilityLoading={
+          conversation.type === 'direct' &&
+          Boolean(partnerUsername) &&
+          (isPartnerProfileLoading || isPartnerProfileFetching)
+        }
+        onRetryMessagingAvailability={
+          conversation.type === 'direct' && (!partnerUsername || isPartnerProfileError)
+            ? () => {
+                if (partnerUsername) {
+                  void refetchPartnerProfile();
+                } else {
+                  void refetch();
+                }
+              }
+            : undefined
+        }
       />
 
       <ConversationDetailsMobile

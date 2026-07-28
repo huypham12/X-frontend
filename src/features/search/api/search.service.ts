@@ -1,8 +1,11 @@
 import { apiClient } from '@/services/api.client';
+import type { SearchUserPage, SearchUsersApiResponse } from '../types/search-user.type';
 
 export const searchService = {
-  searchUsers: async (q: string, limit = 20, cursor?: string) => {
-    const res = await apiClient.get('/search/users', { params: { q, limit, cursor } });
+  searchUsers: async (q: string, limit = 20, cursor?: string): Promise<SearchUserPage> => {
+    const res = await apiClient.get<SearchUsersApiResponse>('/search/users', {
+      params: { q, limit, cursor },
+    });
     return res.data.data;
   },
   searchTweets: async (q: string, type = 'all', limit = 20, cursor?: string) => {

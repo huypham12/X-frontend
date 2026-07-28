@@ -13,6 +13,8 @@ import type {
 import type { ConversationMediaPage } from '../types/conversation-media.type';
 import type { CreateGroupPayload, CreatedGroupConversation } from '../types/create-group.type';
 import type { GroupConversationLookupPage } from '../types/conversation-lookup.type';
+import type { UpdateGroupPayload } from '../types/group-action.type';
+import type { GroupMemberDetails } from '../types/group-member.type';
 
 export const conversationsApi = {
   getConversations: async (): Promise<Conversation[]> => {
@@ -145,6 +147,44 @@ export const conversationsApi = {
     const response = await apiClient.delete(`/conversations/${conversationId}/mute`, {
       params: { type },
     });
+    return response.data.data;
+  },
+
+  updateGroupInfo: async (
+    conversationId: string,
+    payload: UpdateGroupPayload,
+  ): Promise<ConversationActionResult> => {
+    const response = await apiClient.patch(`/conversations/${conversationId}`, payload);
+    return response.data.data;
+  },
+
+  getGroupMembers: async (conversationId: string): Promise<GroupMemberDetails[]> => {
+    const response = await apiClient.get(`/conversations/${conversationId}/members`);
+    return response.data.data;
+  },
+
+  addGroupMembers: async (
+    conversationId: string,
+    memberIds: string[],
+  ): Promise<ConversationActionResult> => {
+    const response = await apiClient.post(`/conversations/${conversationId}/members`, {
+      members: memberIds,
+    });
+    return response.data.data;
+  },
+
+  removeGroupMember: async (
+    conversationId: string,
+    memberId: string,
+  ): Promise<ConversationActionResult> => {
+    const response = await apiClient.delete(
+      `/conversations/${conversationId}/members/${memberId}`,
+    );
+    return response.data.data;
+  },
+
+  leaveGroup: async (conversationId: string): Promise<ConversationActionResult> => {
+    const response = await apiClient.delete(`/conversations/${conversationId}/leave`);
     return response.data.data;
   },
 };

@@ -8,6 +8,7 @@ import { useConversations } from '../hooks/use-conversations';
 import { ConversationDetailsOverview } from './conversation-details-overview';
 import { ConversationSearchView } from './conversation-search-view';
 import { ConversationMediaView } from './conversation-media-view';
+import { GroupMembersView } from './group-members-view';
 
 interface ConversationDetailsPanelProps {
   conversationId: string;
@@ -38,7 +39,13 @@ export const ConversationDetailsPanel = ({
   const { isOnlineFriend } = useFriendPresence();
   const conversation = conversations?.find((item) => item._id === conversationId);
   const panelTitle =
-    view === 'search' ? 'Search messages' : view === 'media' ? 'Shared media' : 'Conversation details';
+    view === 'search'
+      ? 'Search messages'
+      : view === 'media'
+        ? 'Shared media'
+        : view === 'members'
+          ? 'Group members'
+          : 'Conversation details';
 
   return (
     <section
@@ -98,6 +105,8 @@ export const ConversationDetailsPanel = ({
           <ConversationSearchView conversation={conversation} />
         ) : conversation && view === 'media' ? (
           <ConversationMediaView conversationId={conversation._id} />
+        ) : conversation?.type === 'group' && view === 'members' ? (
+          <GroupMembersView conversation={conversation} />
         ) : conversation ? (
           <ConversationDetailsOverview
             conversation={conversation}

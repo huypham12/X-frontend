@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import Cookies from 'js-cookie';
+import { useQueryClient } from '@tanstack/react-query';
+import { useConversationSocketSync } from '@/features/conversations/hooks/use-conversation-socket-sync';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -19,8 +21,10 @@ export const useSocket = () => {
 };
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  useConversationSocketSync(socket);
 
   useEffect(() => {
     const token = Cookies.get('access_token');
@@ -35,6 +39,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     });
 
     socketInstance.on('connect', () => {
+      setSocket(socketInstance);
       setIsConnected(true);
     });
 
@@ -42,12 +47,17 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setIsConnected(false);
     });
 
-    setSocket(socketInstance);
+    const handleBlockStatusChanged = () => {
+      void queryClient.invalidateQueries({ queryKey: ['user'] });
+    };
+
+    socketInstance.on('@user:block-status-changed', handleBlockStatusChanged);
 
     return () => {
+      socketInstance.off('@user:block-status-changed', handleBlockStatusChanged);
       socketInstance.disconnect();
     };
-  }, []);
+  }, [queryClient]);
 
   return (
     <SocketContext.Provider value={{ socket, isConnected }}>

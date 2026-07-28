@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { ArrowLeft, Calendar } from 'lucide-react';
 import Link from 'next/link';
@@ -14,34 +14,46 @@ interface ProfileViewProps {
   username?: string;
 }
 
+type ProfileTab = 'posts' | 'replies' | 'bookmarks' | 'media' | 'likes';
+
+const subscribeToHydration = () => () => undefined;
+const getClientHydrationSnapshot = () => true;
+const getServerHydrationSnapshot = () => false;
+
 export function ProfileView({ username }: ProfileViewProps) {
   const currentUser = useAuthStore((state) => state.user);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(
+    subscribeToHydration,
+    getClientHydrationSnapshot,
+    getServerHydrationSnapshot,
+  );
   const [followListType, setFollowListType] = useState<'followers' | 'following' | null>(null);
-  const [activeTab, setActiveTab] = useState<'posts' | 'replies' | 'bookmarks' | 'media' | 'likes'>('posts');
+  const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const isOwnProfile = !username || username === currentUser?.username;
 
   const { data: profileResponse, isLoading } = useQuery({
     queryKey: ['user', username],
-    queryFn: () => userService.getProfile(username!),
+    queryFn: () => userService.getProfile(username ?? ''),
     enabled: !isOwnProfile,
   });
 
   const displayUser = isOwnProfile ? currentUser : profileResponse?.[0];
 
   const followMutation = useMutation({
-    mutationFn: () => userService.followUser(displayUser?._id),
+    mutationFn: () => {
+      if (!displayUser?._id) throw new Error('User profile is unavailable.');
+      return userService.followUser(displayUser._id);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', username] })
   });
 
   const unfollowMutation = useMutation({
-    mutationFn: () => userService.unfollowUser(displayUser?._id),
+    mutationFn: () => {
+      if (!displayUser?._id) throw new Error('User profile is unavailable.');
+      return userService.unfollowUser(displayUser._id);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', username] })
   });
 
@@ -50,7 +62,7 @@ export function ProfileView({ username }: ProfileViewProps) {
   }
 
   const handleFollowClick = () => {
-    if (displayUser?.is_following) {
+    if (profileResponse?.[0]?.is_following) {
       unfollowMutation.mutate();
     } else {
       followMutation.mutate();
@@ -69,7 +81,7 @@ export function ProfileView({ username }: ProfileViewProps) {
     { id: 'bookmarks', label: 'Bookmarks', hidden: !isOwnProfile },
     { id: 'media', label: 'Media' },
     { id: 'likes', label: 'Likes' }
-  ];
+  ] satisfies { id: ProfileTab; label: string; hidden?: boolean }[];
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -108,12 +120,12 @@ export function ProfileView({ username }: ProfileViewProps) {
                 onClick={handleFollowClick}
                 disabled={followMutation.isPending || unfollowMutation.isPending}
                 className={`rounded-full font-bold px-4 py-1.5 border transition-colors ${
-                  displayUser?.is_following 
+                  profileResponse?.[0]?.is_following
                     ? 'border-gray-500 hover:border-red-500 hover:text-red-500 hover:bg-red-500/10' 
                     : 'bg-white text-black hover:bg-gray-200 border-white'
                 }`}
               >
-                {displayUser?.is_following ? 'Following' : 'Follow'}
+                {profileResponse?.[0]?.is_following ? 'Following' : 'Follow'}
               </button>
             )}
           </div>
@@ -160,7 +172,7 @@ export function ProfileView({ username }: ProfileViewProps) {
         {tabs.filter(t => !t.hidden).map((tab) => (
           <div 
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => setActiveTab(tab.id)}
             className={`flex-1 hover:bg-[#181818] cursor-pointer transition-colors flex justify-center items-center h-14 ${activeTab !== tab.id ? 'text-gray-500' : ''}`}
           >
             <div className="relative h-full flex items-center">
@@ -178,11 +190,11 @@ export function ProfileView({ username }: ProfileViewProps) {
         {displayUser?.username && activeTab === 'bookmarks' ? (
           <BookmarksFeed />
         ) : (
-          displayUser?.username && <ProfileFeed username={displayUser.username} activeTab={activeTab as any} />
+          displayUser?.username && <ProfileFeed username={displayUser.username} activeTab={activeTab} />
         )}
       </div>
 
-      {isOwnProfile && followListType && (
+      {isOwnProfile && followListType && displayUser?._id && (
         <FollowListModal
           open={!!followListType}
           setOpen={(open) => !open && setFollowListType(null)}

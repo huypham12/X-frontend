@@ -44,7 +44,7 @@ export function SearchUsersList({ query }: { query: string }) {
 
   return (
     <div className="flex flex-col">
-      {users.map((user: any) => (
+      {users.map((user) => (
         <Link 
           href={`/profile/${user.username}`} 
           key={user._id}
@@ -52,6 +52,7 @@ export function SearchUsersList({ query }: { query: string }) {
         >
           <div className="w-12 h-12 rounded-full bg-[#333639] overflow-hidden flex-shrink-0">
             {user.avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full" />

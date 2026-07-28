@@ -58,6 +58,9 @@ export function TweetMenu({ tweet }: TweetMenuProps) {
     onSuccess: () => {
       setIsOpen(false);
       queryClient.invalidateQueries({ queryKey: ['tweets'] });
+      if (tweet.author?.username) {
+        queryClient.invalidateQueries({ queryKey: ['user', tweet.author.username] });
+      }
     }
   });
 

@@ -2,14 +2,19 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Bell, BellOff, EyeOff, Images, Pin, PinOff, Search, UserPlus, UserRound, UsersRound } from 'lucide-react';
+import { Bell, BellOff, EyeOff, Images, LogOut, Pencil, Pin, PinOff, Search, UserPlus, UserRound, UsersRound } from 'lucide-react';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { FriendPresenceDot } from '@/features/users/components/friend-presence-dot';
-import type { Conversation } from '../types';
+import type { Conversation, GroupConversation } from '../types';
 import { useConversationActions } from '../hooks/use-conversation-actions';
 import { MuteConversationDialog } from './mute-conversation-dialog';
 import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import { CreateGroupWithPartnerDialog } from './create-group-with-partner-dialog';
 import { HideConversationDialog } from './hide-conversation-dialog';
+import { ConversationBlockAction } from './conversation-block-action';
+import { EditGroupDialog } from './edit-group-dialog';
+import { isCurrentUserGroupAdmin, useGroupActions } from '../hooks/use-group-actions';
+import { LeaveGroupDialog } from './leave-group-dialog';
 
 interface ConversationDetailsOverviewProps {
   conversation: Conversation;
@@ -28,6 +33,35 @@ const getInitials = (name: string) => {
   return initials || '?';
 };
 
+const GroupLeaveAction = ({ conversation }: { conversation: GroupConversation }) => {
+  const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
+  const { isLeaveGroupPending, leaveGroup } = useGroupActions(conversation);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setIsLeaveDialogOpen(true)}
+        disabled={isLeaveGroupPending}
+        className="col-span-2 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#121212] px-3 py-3 text-sm font-semibold text-red-400 transition-colors duration-200 hover:bg-red-500/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:opacity-50"
+      >
+        <LogOut className="h-5 w-5" aria-hidden="true" />
+        Leave group
+      </button>
+
+      {isLeaveDialogOpen && (
+        <LeaveGroupDialog
+          groupName={conversation.name}
+          open={isLeaveDialogOpen}
+          isPending={isLeaveGroupPending}
+          onOpenChange={setIsLeaveDialogOpen}
+          onLeave={leaveGroup}
+        />
+      )}
+    </>
+  );
+};
+
 export const ConversationDetailsOverview = ({
   conversation,
   isPartnerOnline,
@@ -35,12 +69,16 @@ export const ConversationDetailsOverview = ({
   const [isMuteDialogOpen, setIsMuteDialogOpen] = useState(false);
   const [isHideDialogOpen, setIsHideDialogOpen] = useState(false);
   const [isCreateGroupDialogOpen, setIsCreateGroupDialogOpen] = useState(false);
+  const [isEditGroupDialogOpen, setIsEditGroupDialogOpen] = useState(false);
+  const currentUserId = useAuthStore((state) => state.user?._id);
   const openView = useConversationDetailsStore((state) => state.openView);
   const isDirect = conversation.type === 'direct';
   const name = isDirect
     ? conversation.partner_info?.name || 'Unknown user'
     : conversation.name || 'Group chat';
   const avatar = isDirect ? conversation.partner_info?.avatar : conversation.avatar_url;
+  const isGroupAdmin =
+    conversation.type === 'group' && isCurrentUserGroupAdmin(conversation, currentUserId);
   const {
     isMuted,
     mutedUntil,
@@ -187,14 +225,49 @@ export const ConversationDetailsOverview = ({
           </button>
 
           {conversation.type === 'direct' && (
-            <button
-              type="button"
-              onClick={() => setIsCreateGroupDialogOpen(true)}
-              className="col-span-2 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#121212] px-3 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-            >
-              <UserPlus className="h-5 w-5" aria-hidden="true" />
-              Create group with {name}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setIsCreateGroupDialogOpen(true)}
+                className="col-span-2 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#121212] px-3 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <UserPlus className="h-5 w-5" aria-hidden="true" />
+                Create group with {name}
+              </button>
+
+              <ConversationBlockAction
+                partnerName={name}
+                username={conversation.partner_info?.username}
+              />
+            </>
+          )}
+
+          {conversation.type === 'group' && (
+            <>
+              <button
+                type="button"
+                onClick={() => openView('members')}
+                className={`flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#121212] px-3 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+                  isGroupAdmin ? '' : 'col-span-2'
+                }`}
+              >
+                <UsersRound className="h-5 w-5" aria-hidden="true" />
+                Members
+              </button>
+
+              {isGroupAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditGroupDialogOpen(true)}
+                  className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#121212] px-3 py-3 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  <Pencil className="h-5 w-5" aria-hidden="true" />
+                  Edit group
+                </button>
+              )}
+
+              <GroupLeaveAction conversation={conversation} />
+            </>
           )}
 
           <button
@@ -244,6 +317,14 @@ export const ConversationDetailsOverview = ({
             username: conversation.partner_info?.username,
             avatar: conversation.partner_info?.avatar,
           }}
+        />
+      )}
+
+      {isEditGroupDialogOpen && conversation.type === 'group' && (
+        <EditGroupDialog
+          conversation={conversation}
+          open={isEditGroupDialogOpen}
+          onOpenChange={setIsEditGroupDialogOpen}
         />
       )}
     </>

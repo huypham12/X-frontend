@@ -11,12 +11,24 @@ import { MediaUploadButton } from '@/features/media/components/MediaUploadButton
 interface MessageInputProps {
   conversationId: string;
   conversationType: 'direct' | 'group';
+  partnerUsername?: string;
+  disabledReason?: string;
+  isMessagingAvailabilityLoading?: boolean;
+  onRetryMessagingAvailability?: () => void;
 }
 
-export const MessageInput: React.FC<MessageInputProps> = ({ conversationId, conversationType }) => {
+export const MessageInput: React.FC<MessageInputProps> = ({
+  conversationId,
+  conversationType,
+  partnerUsername,
+  disabledReason,
+  isMessagingAvailabilityLoading = false,
+  onRetryMessagingAvailability,
+}) => {
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const { sendMessage, emitTyping } = useChatSocket(conversationId);
+  const [isSending, setIsSending] = useState(false);
+  const { sendMessage, emitTyping } = useChatSocket(conversationId, partnerUsername);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -43,9 +55,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({ conversationId, conv
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
+      isComposerDisabled ||
+      isSending ||
       (!content.trim() && readyMediaIds.length === 0) ||
       isMediaBusy ||
       hasMediaError ||
@@ -54,12 +68,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({ conversationId, conv
       return;
     }
 
-    sendMessage({
+    setIsSending(true);
+    const wasSent = await sendMessage({
       conversation_id: conversationId,
       conversation_type: conversationType,
       content: content.trim(),
       media_ids: readyMediaIds,
     });
+    setIsSending(false);
+
+    if (!wasSent) return;
     
     setContent('');
     clearMedia();
@@ -69,11 +87,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({ conversationId, conv
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e);
+      void handleSubmit(e);
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isComposerDisabled) return;
+
     setContent(e.target.value);
     
     // Simple typing indicator emit
@@ -88,7 +108,15 @@ export const MessageInput: React.FC<MessageInputProps> = ({ conversationId, conv
     setContent((prev) => prev + emojiData.emoji);
   };
 
+  const isComposerDisabled =
+    conversationType === 'direct' &&
+    (isMessagingAvailabilityLoading || Boolean(disabledReason));
+  const composerStatus = isMessagingAvailabilityLoading
+    ? 'Checking whether direct messaging is available…'
+    : disabledReason;
   const isSendDisabled =
+    isComposerDisabled ||
+    isSending ||
     (!content.trim() && readyMediaIds.length === 0) ||
     isMediaBusy ||
     hasMediaError ||
@@ -114,11 +142,30 @@ export const MessageInput: React.FC<MessageInputProps> = ({ conversationId, conv
         </div>
       )}
 
+      {composerStatus && (
+        <div
+          id={`message-composer-status-${conversationId}`}
+          role="status"
+          className="mb-3 flex items-center justify-between gap-3 rounded-xl bg-[#121212] px-4 py-3 text-sm leading-5 text-gray-400"
+        >
+          <span>{composerStatus}</span>
+          {!isMessagingAvailabilityLoading && onRetryMessagingAvailability && (
+            <button
+              type="button"
+              onClick={onRetryMessagingAvailability}
+              className="shrink-0 rounded-full border border-[#536471] px-3 py-1 font-semibold text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="relative flex items-center gap-2 rounded-full bg-[#202327] px-4 py-2">
         <MediaUploadButton
           onSelectFiles={handleSelectFiles}
           maxFiles={4}
-          disabled={mediaItems.length >= 4}
+          disabled={isComposerDisabled || isSending || mediaItems.length >= 4}
           className="p-2 text-twitter-blue hover:bg-[#181818] rounded-full transition flex-shrink-0"
         >
           <ImageIcon className="w-5 h-5" />
@@ -127,6 +174,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ conversationId, conv
         <div className="relative" ref={emojiPickerRef}>
           <button 
             type="button" 
+            disabled={isComposerDisabled || isSending}
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             aria-label="Choose an emoji"
             aria-expanded={showEmojiPicker}
@@ -135,7 +183,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ conversationId, conv
             <Smile className="w-5 h-5" />
           </button>
           
-          {showEmojiPicker && (
+          {showEmojiPicker && !isComposerDisabled && !isSending && (
             <div className="absolute bottom-full left-0 mb-2 z-50">
               <EmojiPicker 
                 onEmojiClick={onEmojiClick} 
@@ -151,8 +199,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({ conversationId, conv
           value={content}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder="Start a new message"
+          disabled={isComposerDisabled || isSending}
+          placeholder={
+            isSending
+              ? 'Sending…'
+              : isComposerDisabled
+                ? 'Direct messaging unavailable'
+                : 'Start a new message'
+          }
           aria-label="Message"
+          aria-describedby={composerStatus ? `message-composer-status-${conversationId}` : undefined}
           className="flex-1 bg-transparent text-white border-none focus:outline-none focus:ring-0 text-[15px]"
         />
         

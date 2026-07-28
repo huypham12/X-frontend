@@ -1,12 +1,17 @@
 import { apiClient } from '@/services/api.client';
-import type { FollowListResponse, Friend, UpdateProfilePayload } from '../types/user.type';
+import type {
+  FollowListResponse,
+  Friend,
+  UpdateProfilePayload,
+  UserProfile,
+} from '../types/user.type';
 
 export const userService = {
   getMe: async () => {
     const res = await apiClient.get('/user/me');
     return res.data.data;
   },
-  getProfile: async (username: string) => {
+  getProfile: async (username: string): Promise<UserProfile[]> => {
     const res = await apiClient.get(`/user/profile/${username}`);
     return res.data.data;
   },
@@ -22,13 +27,11 @@ export const userService = {
     const res = await apiClient.delete(`/user/${followed_user_id}/follow`);
     return res.data.data;
   },
-  blockUser: async (blocked_user_id: string) => {
-    const res = await apiClient.post(`/user/${blocked_user_id}/block`);
-    return res.data.data;
+  blockUser: async (blocked_user_id: string): Promise<void> => {
+    await apiClient.post(`/user/${blocked_user_id}/block`);
   },
-  unblockUser: async (blocked_user_id: string) => {
-    const res = await apiClient.delete(`/user/${blocked_user_id}/block`);
-    return res.data.data;
+  unblockUser: async (blocked_user_id: string): Promise<void> => {
+    await apiClient.delete(`/user/${blocked_user_id}/block`);
   },
   getFollowers: async (target_user_id: string): Promise<FollowListResponse> => {
     const res = await apiClient.get(`/user/${target_user_id}/followers`);

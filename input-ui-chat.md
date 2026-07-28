@@ -14,10 +14,10 @@ Mình hiểu đúng ý tưởng của nút `i`: nó nên mở một “Conversat
 | Ghim/bỏ ghim hội thoại         | `POST/DELETE /:id/pin`                | Làm được, tối đa 5 hội thoại                     |
 | Tắt thông báo                  | `POST/DELETE /:id/mute`               | Làm được, hỗ trợ theo thời gian hoặc vô thời hạn |
 | Ẩn hội thoại khỏi hộp thư      | `DELETE /:id`                         | Làm được                                         |
-| Xem profile/chặn người dùng    | User API                              | Làm được                                         |
-| Đổi tên và avatar nhóm         | `PATCH /:id`                          | Làm được cho group                               |
-| Xem/thêm/xóa thành viên        | Các endpoint `/members`               | Có endpoint nhưng cần sửa quyền                  |
-| Rời nhóm                       | `DELETE /:id/leave`                   | Làm được                                         |
+| Xem profile/chặn người dùng    | User API                              | Đã làm; block ngăn direct message mới hai chiều, giữ lịch sử cũ |
+| Đổi tên và avatar nhóm         | `PATCH /:id`                          | Đã triển khai ở Phase 17                         |
+| Xem/thêm/xóa thành viên        | Các endpoint `/members`               | Đã hoàn thành: mọi member add người họ follow; admin remove member |
+| Rời nhóm                       | `DELETE /:id/leave`                   | Đã triển khai ở Phase 20                         |
 
 ### 1. Tìm kiếm tin nhắn
 
@@ -115,6 +115,15 @@ Panel của group có thể thêm:
 - Rời nhóm.
 - Ghim, mute, tìm kiếm và xem media.
 
+Quy ước add member đã chốt ở Phase 19A:
+
+- Mọi thành viên hiện tại đều được add người mới; không cần admin duyệt.
+- Người thực hiện chỉ được chọn và add những tài khoản chính họ đang follow.
+- Dialog hiển thị ngay toàn bộ following còn khả dụng; ô search chỉ lọc danh sách này, không search toàn hệ thống.
+- Remove member vẫn là quyền admin.
+- Backend phải thực thi cả membership và following rule, không chỉ ẩn lựa chọn trên frontend.
+- Event membership hiện chỉ dùng để đồng bộ cache/realtime. System message hoặc notification thông báo người mới tham gia sẽ triển khai sau.
+
 Những thứ schema có nhưng API/chức năng chưa hoàn chỉnh:
 
 - `admin_only_messaging` có trong [GroupConversation.schema.ts](D:\NodeJS\X-full\X-ver2\src\schemas\GroupConversation.schema.ts:23), nhưng không có endpoint bật/tắt và socket cũng chưa kiểm tra.
@@ -174,5 +183,7 @@ Mình đề xuất mở một drawer bên phải trên desktop và bottom sheet/
 7. Delete from inbox.
 
 Đối với group, thay phần profile/block bằng Group settings và Members.
+
+Quy ước block đã chốt: profile trả riêng `is_blocked` và `is_blocked_by_user`; thay đổi block được đồng bộ realtime cho cả hai phía. Direct composer khóa an toàn khi chưa xác minh được trạng thái. Socket send có acknowledgement, vì vậy text/media đang soạn chỉ bị xóa sau khi server xác nhận gửi thành công; lỗi, mất kết nối hoặc bị block đều giữ draft để người dùng xử lý lại.
 
 Kết luận: search, media, tạo group, pin, mute và ẩn hội thoại đều có nền tảng backend để làm. Tuy nhiên nên sửa membership authorization, response media, cache thành viên và realtime events trước; sau đó frontend drawer có thể triển khai khá đầy đủ mà không cần thay đổi lớn cấu trúc database.
