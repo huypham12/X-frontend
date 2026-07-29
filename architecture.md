@@ -45,3 +45,12 @@ src/
 ## 5. Performance & Accessibility
 - **Performance:** Use `useMemo` / `useCallback` when necessary. Use Skeleton loaders instead of spinners for loading >300ms. Optimize images (`next/image`).
 - **Accessibility:** Ensure ARIA labels, keyboard navigation, semantic HTML, and proper focus states are implemented.
+
+## 6. Group Administration Invariant
+
+- A non-empty group has exactly one member with role `admin`; the product does not support multiple admins.
+- Group creation assigns `admin` only to the creator. Added members always receive role `member`.
+- A sole admin cannot use the normal leave endpoint while other members remain.
+- To leave, the admin selects one current `member`. The backend atomically changes that member to `admin` and removes the previous admin through `POST /conversations/:conversation_id/transfer-admin-and-leave`.
+- The transfer mutation must guard the current admin, successor membership and single-admin invariant again at write time. The frontend must not emulate transfer with two separate requests.
+- Successful transfer emits `@conversation:group-updated` with `change_type: admin_transferred`; clients invalidate conversation/member queries, while every tab belonging to the previous admin removes group caches and exits the conversation route.

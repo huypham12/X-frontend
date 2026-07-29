@@ -3,12 +3,12 @@
 import React, { useState } from 'react';
 import type { Message } from '../types';
 import { format } from 'date-fns';
-import { AudioPlayer } from '@/features/media/components/viewers/AudioPlayer';
 import { MessageReplyPreview } from './message-reply-preview';
 import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import type { MessageReactionEmoji } from '../types/message-action.type';
 import { MessageReactionSummary } from './message-reaction-summary';
 import { MessageReactionsDialog } from './message-reactions-dialog';
+import { MessageAttachments } from './message-attachments';
 
 interface MessageBubbleProps {
   message: Message;
@@ -81,45 +81,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </div>
         )}
 
-        {medias.length > 0 && (
-          <div className={`flex max-w-full flex-col gap-2 ${hasContent || hasReply ? 'mt-2' : ''}`}>
-            {medias.map((media) => {
-              if (media.type === 'audio') {
-                return (
-                  <div key={media._id} className="w-[min(450px,calc(100vw-5rem))] max-w-full">
-                    <AudioPlayer url={media.url} />
-                  </div>
-                );
-              }
-
-              if (media.type === 'video') {
-                return (
-                  <video
-                    key={media._id}
-                    src={media.url}
-                    poster={media.thumbnail}
-                    controls
-                    playsInline
-                    preload="metadata"
-                    aria-label="Video attachment"
-                    className="max-h-60 max-w-full rounded-xl border border-[#333] bg-black object-contain"
-                  />
-                );
-              }
-
-              return (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={media._id}
-                  src={media.url}
-                  alt="Image attachment"
-                  loading="lazy"
-                  className="max-h-60 max-w-full rounded-xl border border-[#333] object-contain"
-                />
-              );
-            })}
-          </div>
-        )}
+        <MessageAttachments medias={medias} hasLeadingContent={hasContent || hasReply} />
         <MessageReactionSummary
           reactions={message.reactions}
           currentUserId={currentUserId}

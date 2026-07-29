@@ -14,10 +14,9 @@ import { conversationsApi } from '../api/conversations.api';
 import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import type { Conversation, GroupConversation } from '../types';
 import type { UpdateGroupPayload } from '../types/group-action.type';
-import { CONVERSATION_MEDIA_QUERY_KEY } from './use-conversation-media';
+import { removeConversationCaches } from '../utils/conversation-cache';
 import { CONVERSATIONS_QUERY_KEY } from './use-conversations';
 import { GROUP_MEMBERS_QUERY_KEY } from './use-group-members';
-import { MESSAGES_QUERY_KEY } from './use-messages';
 
 interface ApiErrorBody {
   code?: string;
@@ -27,6 +26,7 @@ interface ApiErrorBody {
 const AVATAR_POLL_INTERVAL_MS = 2_000;
 const AVATAR_POLL_ATTEMPTS = 60;
 const SOLE_ADMIN_CANNOT_LEAVE_CODE = 'GROUP_SOLE_ADMIN_CANNOT_LEAVE';
+const ADMIN_TRANSFER_CONFLICT_CODE = 'GROUP_ADMIN_TRANSFER_CONFLICT';
 
 const wait = (milliseconds: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
@@ -136,6 +136,13 @@ export const useGroupActions = (conversation: GroupConversation) => {
       queryClient.invalidateQueries({ queryKey: GROUP_MEMBERS_QUERY_KEY(conversation._id) }),
     ]);
   };
+  const handleDepartureSuccess = async (message: string) => {
+    await removeConversationCaches(queryClient, conversation._id);
+    closeDetails();
+    router.replace('/messages');
+    await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    toast.success(message);
+  };
   const updateMutation = useMutation({
     mutationFn: (payload: UpdateGroupPayload) =>
       conversationsApi.updateGroupInfo(conversation._id, payload),
@@ -178,35 +185,31 @@ export const useGroupActions = (conversation: GroupConversation) => {
   });
   const leaveGroupMutation = useMutation({
     mutationFn: () => conversationsApi.leaveGroup(conversation._id),
-    onSuccess: async () => {
-      const conversationQueryKeys = [
-        GROUP_MEMBERS_QUERY_KEY(conversation._id),
-        MESSAGES_QUERY_KEY(conversation._id),
-        CONVERSATION_MEDIA_QUERY_KEY(conversation._id),
-        ['conversation-message-search', conversation._id],
-        ['conversation-message-context', conversation._id],
-      ];
-
-      await Promise.all(
-        conversationQueryKeys.map((queryKey) => queryClient.cancelQueries({ queryKey })),
-      );
-      queryClient.setQueryData<Conversation[]>(CONVERSATIONS_QUERY_KEY, (conversations) =>
-        conversations?.filter((item) => item._id !== conversation._id),
-      );
-      conversationQueryKeys.forEach((queryKey) => {
-        queryClient.removeQueries({ queryKey });
-      });
-      closeDetails();
-      router.replace('/messages');
-      await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
-      toast.success('You left the group.');
-    },
+    onSuccess: () => handleDepartureSuccess('You left the group.'),
     onError: (error) => {
       if (getErrorCode(error) === SOLE_ADMIN_CANNOT_LEAVE_CODE) {
-        toast.error('You are the only admin. Remove the remaining members before leaving.');
+        toast.error('Choose a new admin before leaving the group.');
         return;
       }
       toast.error(getErrorMessage(error, 'Could not leave this group.'));
+    },
+  });
+  const transferAdminAndLeaveMutation = useMutation({
+    mutationFn: (successorUserId: string) =>
+      conversationsApi.transferAdminAndLeave(conversation._id, {
+        successor_user_id: successorUserId,
+      }),
+    onSuccess: () =>
+      handleDepartureSuccess('Admin transferred. You left the group.'),
+    onError: (error) => {
+      if (getErrorCode(error) === ADMIN_TRANSFER_CONFLICT_CODE) {
+        void queryClient.invalidateQueries({
+          queryKey: GROUP_MEMBERS_QUERY_KEY(conversation._id),
+        });
+        toast.error('The member list changed. Refresh it and choose the new admin again.');
+        return;
+      }
+      toast.error(getErrorMessage(error, 'Could not transfer admin and leave the group.'));
     },
   });
 
@@ -237,17 +240,28 @@ export const useGroupActions = (conversation: GroupConversation) => {
     }
   };
 
+  const transferAdminAndLeave = async (successorUserId: string) => {
+    try {
+      await transferAdminAndLeaveMutation.mutateAsync(successorUserId);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   return {
     isAdmin,
     isUpdatePending: updateMutation.isPending,
     isAddMembersPending: addMembersMutation.isPending,
     isRemoveMemberPending: removeMemberMutation.isPending,
     removingMemberId: removeMemberMutation.isPending ? removeMemberMutation.variables : undefined,
-    isLeaveGroupPending: leaveGroupMutation.isPending,
+    isLeaveGroupPending:
+      leaveGroupMutation.isPending || transferAdminAndLeaveMutation.isPending,
     updateGroupInfo: updateMutation.mutateAsync,
     uploadGroupAvatar: uploadReadyGroupAvatar,
     addGroupMembers,
     removeGroupMember,
     leaveGroup,
+    transferAdminAndLeave,
   };
 };

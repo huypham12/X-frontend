@@ -17,8 +17,8 @@ interface ConversationDetailsPanelProps {
 }
 
 const ConversationDetailsSkeleton = () => (
-  <div className="flex animate-pulse items-center gap-4 px-5 py-5" aria-label="Loading conversation details">
-    <div className="h-16 w-16 shrink-0 rounded-full bg-[#181818]" />
+  <div className="flex animate-pulse items-center gap-3 px-4 py-4" aria-label="Loading conversation details">
+    <div className="h-[52px] w-[52px] shrink-0 rounded-full bg-[#181818]" />
     <div className="min-w-0 flex-1 space-y-2">
       <div className="h-5 w-36 max-w-full rounded bg-[#181818]" />
       <div className="h-4 w-24 max-w-full rounded bg-[#181818]" />
@@ -53,7 +53,7 @@ export const ConversationDetailsPanel = ({
       aria-labelledby={`${panelId}-title`}
       className="flex h-full min-h-0 w-full flex-col bg-black text-white"
     >
-      <header className="flex h-[65px] shrink-0 items-center justify-between border-b border-[#2f3336] px-4">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#2f3336] px-4">
         <div className="flex min-w-0 items-center gap-2">
           {view !== 'overview' && (
             <button
@@ -69,7 +69,7 @@ export const ConversationDetailsPanel = ({
             id={`${panelId}-title`}
             ref={headingRef}
             tabIndex={headingRef ? -1 : undefined}
-            className="truncate text-xl font-bold outline-none"
+            className="truncate text-lg font-bold outline-none"
           >
             {panelTitle}
           </h2>

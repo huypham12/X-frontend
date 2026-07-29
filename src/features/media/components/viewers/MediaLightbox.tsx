@@ -10,6 +10,7 @@ interface MediaLightboxProps {
   medias: MediaMetadata[];
   initialIndex?: number;
   isOpen: boolean;
+  viewerLabel?: string;
   onClose: () => void;
 }
 
@@ -22,11 +23,23 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
-export function MediaLightbox({ medias, initialIndex = 0, isOpen, onClose }: MediaLightboxProps) {
+export function MediaLightbox({
+  medias,
+  initialIndex = 0,
+  isOpen,
+  viewerLabel = 'Shared media viewer',
+  onClose,
+}: MediaLightboxProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const prefersReducedMotion = useReducedMotion();
+  const currentMedia = medias[currentIndex];
+
+  useEffect(() => {
+    if (!isOpen || medias.length === 0) return;
+    setCurrentIndex(Math.min(Math.max(initialIndex, 0), medias.length - 1));
+  }, [initialIndex, isOpen, medias.length]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -121,7 +134,7 @@ export function MediaLightbox({ medias, initialIndex = 0, isOpen, onClose }: Med
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, currentIndex, medias.length, onClose]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !currentMedia) return null;
 
   return (
     <AnimatePresence>
@@ -129,7 +142,7 @@ export function MediaLightbox({ medias, initialIndex = 0, isOpen, onClose }: Med
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Shared media viewer"
+        aria-label={viewerLabel}
         tabIndex={-1}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -145,7 +158,7 @@ export function MediaLightbox({ medias, initialIndex = 0, isOpen, onClose }: Med
             type="button"
             aria-label="Close media viewer"
             onClick={(e) => { e.stopPropagation(); onClose(); }}
-            className="flex h-10 w-10 items-center justify-center rounded-full text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <X className="h-6 w-6" aria-hidden="true" />
           </button>
@@ -154,7 +167,7 @@ export function MediaLightbox({ medias, initialIndex = 0, isOpen, onClose }: Med
             type="button"
             onClick={handleDownload}
             aria-label="Download current media"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             <Download className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -181,10 +194,22 @@ export function MediaLightbox({ medias, initialIndex = 0, isOpen, onClose }: Med
             exit={{ opacity: 0, scale: prefersReducedMotion ? 1 : 0.95 }}
             transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', damping: 25, stiffness: 200 }}
             className="w-full h-full p-10 flex items-center justify-center"
-            onClick={(e) => e.stopPropagation()} // Prevent click from closing
           >
             <div className="max-w-[90vw] max-h-[90vh] w-full h-full flex items-center justify-center">
-               <MediaPlayer media={medias[currentIndex]} className="!w-auto !h-auto max-w-full max-h-full object-contain" />
+              {currentMedia.type === 'image' ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={currentMedia.url}
+                  alt="Full-size attachment"
+                  onClick={(event) => event.stopPropagation()}
+                  className="max-h-full max-w-full object-contain"
+                />
+              ) : (
+                <MediaPlayer
+                  media={currentMedia}
+                  className="!h-auto !w-auto max-h-full max-w-full object-contain"
+                />
+              )}
             </div>
           </motion.div>
 

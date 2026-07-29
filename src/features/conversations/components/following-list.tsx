@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { userService } from '@/features/users/api/user.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
@@ -10,7 +11,8 @@ import { FriendPresenceDot } from '@/features/users/components/friend-presence-d
 
 export const FollowingListForChat = ({ searchQuery }: { searchQuery?: string }) => {
   const { user } = useAuthStore();
-  const { mutate: createConversation, isPending } = useCreateConversation();
+  const createConversation = useCreateConversation();
+  const router = useRouter();
   const { isOnlineFriend } = useFriendPresence();
 
   const { data: followingData, isLoading } = useQuery({
@@ -62,7 +64,12 @@ export const FollowingListForChat = ({ searchQuery }: { searchQuery?: string }) 
       {filteredFollowing.map((u) => (
         <div 
           key={u._id} 
-          onClick={() => !isPending && createConversation(u._id)}
+          onClick={() => {
+            if (createConversation.isPending) return;
+            void createConversation.mutateAsync(u._id)
+              .then((result) => router.push(`/messages/${result.conversation._id}`))
+              .catch(() => undefined);
+          }}
           className="flex items-center gap-3 p-4 cursor-pointer transition hover:bg-[#121212] opacity-80 hover:opacity-100"
         >
           <div className="relative shrink-0">

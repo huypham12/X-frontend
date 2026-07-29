@@ -3,11 +3,16 @@ export interface UpdateGroupPayload {
   avatar_url?: string;
 }
 
+export interface TransferAdminAndLeavePayload {
+  successor_user_id: string;
+}
+
 export type GroupUpdateChangeType =
   | 'info_updated'
   | 'members_added'
   | 'member_removed'
-  | 'member_left';
+  | 'member_left'
+  | 'admin_transferred';
 
 export interface GroupUpdatedEvent {
   conversation_id: string;

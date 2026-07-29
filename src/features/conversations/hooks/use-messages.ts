@@ -1,7 +1,8 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { conversationsApi } from '../api/conversations.api';
+import { MESSAGES_QUERY_KEY } from '../constants/conversation-query-keys';
 
-export const MESSAGES_QUERY_KEY = (conversationId: string) => ['messages', conversationId];
+export { MESSAGES_QUERY_KEY } from '../constants/conversation-query-keys';
 
 export const useMessages = (conversationId: string) => {
   return useInfiniteQuery({

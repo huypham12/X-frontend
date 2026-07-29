@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { conversationsApi } from '../api/conversations.api';
+import { CONVERSATIONS_QUERY_KEY } from '../constants/conversation-query-keys';
 
-export const CONVERSATIONS_QUERY_KEY = ['conversations'];
+export { CONVERSATIONS_QUERY_KEY } from '../constants/conversation-query-keys';
 
 export const useConversations = () => {
   return useQuery({

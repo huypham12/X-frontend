@@ -17,7 +17,7 @@ Mình hiểu đúng ý tưởng của nút `i`: nó nên mở một “Conversat
 | Xem profile/chặn người dùng    | User API                              | Đã làm; block ngăn direct message mới hai chiều, giữ lịch sử cũ |
 | Đổi tên và avatar nhóm         | `PATCH /:id`                          | Đã triển khai ở Phase 17                         |
 | Xem/thêm/xóa thành viên        | Các endpoint `/members`               | Đã hoàn thành: mọi member add người họ follow; admin remove member |
-| Rời nhóm                       | `DELETE /:id/leave`                   | Đã triển khai ở Phase 20                         |
+| Rời nhóm                       | `DELETE /:id/leave`, `POST /:id/transfer-admin-and-leave` | Đã hoàn thành; sole admin chọn người kế nhiệm rồi rời nguyên tử |
 
 ### 1. Tìm kiếm tin nhắn
 
@@ -102,6 +102,9 @@ Quy ước sản phẩm đã chốt cho thao tác ẩn:
 - Người đã ẩn phải chủ động tìm lại người hoặc group trong ô tìm kiếm hộp thư rồi chọn kết quả để mở lại.
 - Tìm người tiếp tục giới hạn trong nguồn following hiện có; tìm group áp dụng cho mọi group mà current user vẫn là thành viên, kể cả group đang ẩn.
 - Mở lại chỉ `$pull` current user khỏi `hidden_by`, không thay đổi trạng thái ẩn của thành viên khác.
+- Open/create direct và unhide direct/group trả conversation đã normalize cùng `reopened_at` từ server; frontend upsert cache rồi mở thẳng `/messages/:conversationId`, còn refetch danh sách chỉ chạy nền.
+
+Quy ước trên chỉ áp dụng cho **Hide from inbox**. Với **Delete chat for me**, message mới đầu tiên sau cutoff sẽ tự đưa hội thoại trở lại như một chat mới; lịch sử trước cutoff vẫn không xuất hiện.
 
 ## Chức năng riêng cho group
 
@@ -127,7 +130,7 @@ Quy ước add member đã chốt ở Phase 19A:
 Những thứ schema có nhưng API/chức năng chưa hoàn chỉnh:
 
 - `admin_only_messaging` có trong [GroupConversation.schema.ts](D:\NodeJS\X-full\X-ver2\src\schemas\GroupConversation.schema.ts:23), nhưng không có endpoint bật/tắt và socket cũng chưa kiểm tra.
-- Không có endpoint chuyển quyền admin hoặc chỉ định thêm admin.
+- Mỗi group chỉ có một admin. Sole admin có thể chọn đúng một member kế nhiệm và rời nhóm bằng mutation nguyên tử; không hỗ trợ tạo nhiều admin.
 - Không có endpoint giải tán nhóm.
 - `last_seen` của thành viên có trong schema nhưng không thấy nơi cập nhật.
 - Nickname được nhắc trong `endpoint.md`, nhưng DirectConversation không có trường nickname và `PATCH /:id` thực tế chỉ cập nhật tên/avatar group.

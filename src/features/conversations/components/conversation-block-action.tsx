@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Ban, RotateCcw, ShieldCheck } from 'lucide-react';
+import { Ban, ChevronRight, RotateCcw, ShieldCheck } from 'lucide-react';
 import { useConversationPartnerBlockAction } from '../hooks/use-conversation-partner-profile';
 import { BlockUserDialog } from './block-user-dialog';
 
@@ -42,16 +42,19 @@ export const ConversationBlockAction = ({
             setIsDialogOpen(true);
           }
         }}
-        className="col-span-2 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#121212] px-3 py-3 text-sm font-semibold text-red-400 transition-colors duration-200 hover:bg-[#181818] hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left text-sm font-medium text-red-400 transition-colors duration-200 hover:bg-red-500/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-400 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isError ? (
-          <RotateCcw className="h-5 w-5" aria-hidden="true" />
+          <RotateCcw className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
         ) : isBlocked ? (
-          <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+          <ShieldCheck className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
         ) : (
-          <Ban className="h-5 w-5" aria-hidden="true" />
+          <Ban className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
         )}
-        {isLoading || isFetching ? 'Checking block status…' : isError ? 'Retry block status' : isBlocked ? 'Unblock user' : 'Block user'}
+        <span className="min-w-0 flex-1 truncate">
+          {isLoading || isFetching ? 'Checking block status…' : isError ? 'Retry block status' : isBlocked ? 'Unblock user' : 'Block user'}
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-red-400/70" aria-hidden="true" />
       </button>
 
       <BlockUserDialog

@@ -10,6 +10,11 @@ import { CONVERSATIONS_QUERY_KEY } from './use-conversations';
 import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import type { Conversation } from '../types';
 import type { MuteDurationHours } from '../types/conversation-action.type';
+import { useMessageComposerStore } from '../stores/message-composer.store';
+import {
+  clearConversationHistoryCaches,
+  sortConversations,
+} from '../utils/conversation-cache';
 
 interface ApiErrorBody {
   message?: string;
@@ -26,15 +31,6 @@ const getErrorMessage = (error: unknown, fallbackMessage: string) => {
 
   return error instanceof Error ? error.message : fallbackMessage;
 };
-
-const sortConversations = (conversations: Conversation[]) =>
-  [...conversations].sort((first, second) => {
-    if (first.is_pinned !== second.is_pinned) {
-      return first.is_pinned ? -1 : 1;
-    }
-
-    return new Date(second.last_message_at).getTime() - new Date(first.last_message_at).getTime();
-  });
 
 export const getActiveConversationMute = (
   conversation: Conversation,
@@ -176,6 +172,21 @@ export const useConversationActions = (conversation: Conversation) => {
     },
   });
 
+  const clearHistoryMutation = useMutation({
+    mutationFn: () => conversationsApi.clearConversationHistory(conversation._id),
+    onSuccess: async () => {
+      clearConversationHistoryCaches(queryClient, conversation._id);
+      const composer = useMessageComposerStore.getState();
+      if (composer.conversationId === conversation._id) composer.clearReply();
+      closeDetails();
+      router.replace('/messages');
+      await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, 'Could not delete this chat history.'));
+    },
+  });
+
   const muteConversation = async (durationHours?: MuteDurationHours) => {
     if (!currentUserId) {
       toast.error('Your account information is not available yet.');
@@ -199,15 +210,26 @@ export const useConversationActions = (conversation: Conversation) => {
     }
   };
 
+  const clearConversationHistory = async () => {
+    try {
+      await clearHistoryMutation.mutateAsync();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   return {
     isMuted: Boolean(activeMute),
     mutedUntil: activeMute?.until ?? null,
     isPinPending: pinMutation.isPending,
     isMutePending: muteMutation.isPending || unmuteMutation.isPending,
     isHidePending: hideMutation.isPending,
+    isClearHistoryPending: clearHistoryMutation.isPending,
     togglePin: () => pinMutation.mutate(!conversation.is_pinned),
     muteConversation,
     unmuteConversation: () => unmuteMutation.mutate(),
     hideConversation,
+    clearConversationHistory,
   };
 };

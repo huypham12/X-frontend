@@ -5,7 +5,8 @@ import type { Conversation } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { FriendPresenceDot } from '@/features/users/components/friend-presence-dot';
-import { Pin } from 'lucide-react';
+import { BellOff, Pin } from 'lucide-react';
+import { getActiveConversationMute } from '../hooks/use-conversation-actions';
 
 interface ConversationItemProps {
   conversation: Conversation;
@@ -20,7 +21,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   isOnline = false,
   onClick,
 }) => {
-  const { user } = useAuthStore();
+  const currentUserId = useAuthStore((state) => state.user?._id);
   
   // Determine name and avatar based on conversation type
   let title = 'Unknown';
@@ -38,7 +39,20 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
     ? formatDistanceToNow(new Date(conversation.last_message_at), { addSuffix: false })
     : '';
 
-  const isSentByMe = conversation.last_message_preview?.sender_id === user?._id;
+  const isSentByMe = conversation.last_message_preview?.sender_id === currentUserId;
+  const activeMute = getActiveConversationMute(conversation, currentUserId);
+  const isMuted = Boolean(activeMute);
+  const [, refreshMuteExpiry] = React.useReducer((version: number) => version + 1, 0);
+
+  React.useEffect(() => {
+    if (!activeMute?.until) return;
+
+    const remainingMilliseconds = new Date(activeMute.until).getTime() - Date.now();
+    if (remainingMilliseconds <= 0) return;
+    const expiryTimer = window.setTimeout(refreshMuteExpiry, remainingMilliseconds + 50);
+
+    return () => window.clearTimeout(expiryTimer);
+  }, [activeMute?.until]);
   const messageTypeLabels: Partial<Record<Conversation['last_message_preview']['message_type'], string>> = {
     image: 'Sent an image',
     video: 'Sent a video',
@@ -81,12 +95,23 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
         </p>
       </div>
       
-      {conversation.is_pinned && (
-        <Pin
-          role="img"
-          aria-label="Pinned conversation"
-          className="h-3.5 w-3.5 flex-shrink-0 text-gray-500"
-        />
+      {(isMuted || conversation.is_pinned) && (
+        <div className="flex shrink-0 items-center gap-1.5">
+          {isMuted && (
+            <BellOff
+              role="img"
+              aria-label="Notifications muted"
+              className="h-3.5 w-3.5 shrink-0 text-gray-500"
+            />
+          )}
+          {conversation.is_pinned && (
+            <Pin
+              role="img"
+              aria-label="Pinned conversation"
+              className="h-3.5 w-3.5 shrink-0 text-gray-500"
+            />
+          )}
+        </div>
       )}
     </div>
   );

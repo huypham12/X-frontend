@@ -1,8 +1,10 @@
 import axios from 'axios';
-import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { conversationsApi } from '../api/conversations.api';
+import { CONVERSATIONS_QUERY_KEY } from './use-conversations';
+import { upsertConversationCache } from '../utils/conversation-cache';
+import { markConversationReopened } from '../utils/conversation-reopen-state';
 
 interface ApiErrorBody {
   message?: string;
@@ -18,13 +20,13 @@ const getErrorMessage = (error: unknown) => {
 
 export const useCreateConversation = () => {
   const queryClient = useQueryClient();
-  const router = useRouter();
 
   return useMutation({
     mutationFn: (userId: string) => conversationsApi.getOrCreateDirectConversation(userId),
-    onSuccess: async (conversation) => {
-      await queryClient.invalidateQueries({ queryKey: ['conversations'] });
-      router.push(`/messages/${conversation._id}`);
+    onSuccess: (result) => {
+      markConversationReopened(result.conversation._id, result.reopened_at);
+      upsertConversationCache(queryClient, result.conversation);
+      void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));

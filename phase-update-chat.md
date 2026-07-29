@@ -55,7 +55,7 @@ Sau khi hoàn thành toàn bộ kế hoạch:
 
 Trong kế hoạch này, “xóa hẳn đoạn chat” được chốt là **delete chat for me**. Không triển khai xóa vật lý cho tất cả, giải tán group hoặc cho một phía xóa lịch sử của phía còn lại. Nếu product muốn hành vi đó, phải lập kế hoạch riêng về quyền, retention, media, notification và recovery.
 
-Tin nhắn mới không tự bỏ actor khỏi `hidden_by`, giữ đúng quyết định của kế hoạch cũ. Actor muốn mở lại phải tìm person/group và unhide; khi mở lại chỉ thấy message sau mốc đã clear.
+Hide conversation không tự bỏ actor khỏi `hidden_by`; actor phải tìm person/group và chủ động unhide. Riêng Delete chat for me đặt marker restore: message mới đầu tiên sau cutoff tự đưa conversation trở lại như chat mới, còn lịch sử tại/trước cutoff vẫn bị ẩn với actor.
 
 ### 3.2. Contract message dùng chung
 
@@ -483,7 +483,7 @@ Mỗi payload tối thiểu có `conversation_id`, `message_id` nếu liên quan
 
 ## Phase 13 — Lightbox cho ảnh trong message
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Một chức năng:** mở ảnh attachment trực tiếp từ bubble.
 
@@ -507,7 +507,7 @@ Mỗi payload tối thiểu có `conversation_id`, `message_id` nếu liên quan
 
 ## Phase 14 — Icon mute trong conversation sidebar
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Một chức năng:** hiển thị trạng thái notifications muted cạnh pin.
 
@@ -529,7 +529,7 @@ Mỗi payload tối thiểu có `conversation_id`, `message_id` nếu liên quan
 
 ## Phase 15 — Backend delete chat history for me
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Một chức năng:** clear toàn bộ lịch sử đến thời điểm hiện tại chỉ cho actor.
 
@@ -560,19 +560,23 @@ data: { success: true, cleared_at: ISODate }
 2. Operation cùng lúc add actor vào `hidden_by`, bỏ actor khỏi `pinned_by/muted_by` và reset preview override của actor; không delete message/media vật lý.
 3. Main messages/context/search/media/read chỉ nhận message có `_id > cleared_through_message_id`; target tại/trước cutoff trả 404 với actor nhưng member khác vẫn đọc được. Không lọc chính bằng clock `send_at` vì dễ lệch thời gian và khó tận dụng index timeline hiện có.
 4. Redis cache bị invalidate; event `@conversation:history-cleared` chỉ tới actor devices.
-5. New message không tự `$pull hidden_by`. Khi actor chủ động unhide, chỉ message sau `cleared_at` xuất hiện.
+5. Marker clear chờ đúng message mới đầu tiên để `$pull hidden_by` và mở lại như chat mới; Hide from inbox thuần túy vẫn không tự restore. Khi actor chủ động unhide, chỉ message sau cutoff xuất hiện.
+6. Direct open và direct/group unhide trả `{ success, reopened_at, conversation }`; conversation được normalize theo actor và không lộ cutoff/preview override nội bộ.
 
 **Gate hoàn thành:** A clear không ảnh hưởng B/C; A không lấy lại lịch sử cũ qua API/search/media/context; unhide A chỉ thấy message mới hơn cutoff; group/direct cùng semantics.
 
 ## Phase 16 — Frontend delete chat history for me
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Một chức năng:** destructive action “Delete chat for me” trong details.
 
 **File tạo mới:**
 
 - `X-frontend/src/features/conversations/components/delete-chat-history-dialog.tsx`.
+- `X-frontend/src/features/conversations/constants/conversation-query-keys.ts`.
+- `X-frontend/src/features/conversations/utils/conversation-cache.ts`.
+- `X-frontend/src/features/conversations/utils/conversation-reopen-state.ts`.
 
 **File sửa:**
 
@@ -581,6 +585,11 @@ data: { success: true, cleared_at: ISODate }
 - `X-frontend/src/features/conversations/hooks/use-conversation-actions.ts`.
 - `X-frontend/src/features/conversations/components/conversation-details-overview.tsx`.
 - `X-frontend/src/features/conversations/hooks/use-chat-socket.ts` hoặc global conversation sync hook cho private event.
+- `X-frontend/src/features/conversations/hooks/use-create-conversation.ts`.
+- `X-frontend/src/features/conversations/hooks/use-reopen-conversation.ts`.
+- `X-frontend/src/features/conversations/components/conversation-search-results.tsx`.
+- `X-frontend/src/features/conversations/components/following-list.tsx`.
+- `X-frontend/src/features/conversations/components/chat-window.tsx`.
 
 **Chi tiết:**
 
@@ -588,6 +597,8 @@ data: { success: true, cleared_at: ISODate }
 2. Không optimistic clear. Success remove conversation khỏi sidebar, đóng details, route `/messages` và remove/invalidate messages/context/search/media/conversations keys của id.
 3. Error giữ dialog và lịch sử hiện tại; không route hoặc clear cache giả.
 4. Event private từ thiết bị khác thực hiện cùng cleanup, tránh tab cũ tiếp tục render history.
+5. Search direct/group upsert conversation đã normalize trước khi điều hướng; refetch chỉ đối chiếu nền, không còn chặn mở ChatWindow.
+6. `reopened_at` từ server chặn event history-cleared đến trễ cho cả direct/group; ChatWindow phân biệt loading, refetch error và unavailable để không treo skeleton vô hạn.
 
 **Gate hoàn thành:** direct/group delete đúng phía actor; browser back không render cache cũ; B/C không thấy thay đổi; hide/unhide cũ không bị đổi semantics.
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { UsersRound } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { FriendPresenceDot } from '@/features/users/components/friend-presence-dot';
 import { useFriendPresence } from '@/features/users/hooks/use-friend-presence';
 import { useCreateConversation } from '../hooks/use-create-conversation';
@@ -44,15 +45,36 @@ export const ConversationSearchResults = ({
   } = useInboxConversationSearch(keyword);
   const createConversation = useCreateConversation();
   const reopenConversation = useReopenConversation();
+  const router = useRouter();
   const { isOnlineFriend } = useFriendPresence();
   const hasKeyword = keyword.trim().length > 0;
   const isOpening = createConversation.isPending || reopenConversation.isPending;
+
+  const openPersonConversation = async (personId: string) => {
+    try {
+      const result = await createConversation.mutateAsync(personId);
+      router.push(`/messages/${result.conversation._id}`);
+      onConversationOpened();
+    } catch {
+      // The mutation hook presents the API error to the user.
+    }
+  };
+
+  const openGroupConversation = async (conversationId: string) => {
+    try {
+      const result = await reopenConversation.mutateAsync(conversationId);
+      router.push(`/messages/${result.conversation._id}`);
+      onConversationOpened();
+    } catch {
+      // The mutation hook presents the API error to the user.
+    }
+  };
 
   return (
     <div className="pb-4">
       <section aria-labelledby="people-search-heading">
         <h3 id="people-search-heading" className="px-4 py-2 text-sm font-bold text-gray-400">
-          People
+          {hasKeyword ? 'People' : 'People you follow'}
         </h3>
         {isPeopleLoading ? (
           <SearchSectionSkeleton />
@@ -70,9 +92,7 @@ export const ConversationSearchResults = ({
               key={person._id}
               type="button"
               disabled={isOpening}
-              onClick={() =>
-                createConversation.mutate(person._id, { onSuccess: onConversationOpened })
-              }
+              onClick={() => void openPersonConversation(person._id)}
               className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-200 hover:bg-[#121212] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               <div className="relative shrink-0">
@@ -121,9 +141,7 @@ export const ConversationSearchResults = ({
                   key={group._id}
                   type="button"
                   disabled={isOpening}
-                  onClick={() =>
-                    reopenConversation.mutate(group._id, { onSuccess: onConversationOpened })
-                  }
+                  onClick={() => void openGroupConversation(group._id)}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-200 hover:bg-[#121212] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#181818]">

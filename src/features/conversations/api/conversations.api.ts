@@ -2,6 +2,8 @@ import { apiClient } from '@/services/api.client';
 import type { Conversation, Message, PaginationResponse } from '../types';
 import type {
   ConversationActionResult,
+  ConversationHistoryClearResult,
+  ConversationOpenResult,
   MuteConversationPayload,
   MuteConversationResult,
 } from '../types/conversation-action.type';
@@ -13,7 +15,10 @@ import type {
 import type { ConversationMediaPage } from '../types/conversation-media.type';
 import type { CreateGroupPayload, CreatedGroupConversation } from '../types/create-group.type';
 import type { GroupConversationLookupPage } from '../types/conversation-lookup.type';
-import type { UpdateGroupPayload } from '../types/group-action.type';
+import type {
+  TransferAdminAndLeavePayload,
+  UpdateGroupPayload,
+} from '../types/group-action.type';
 import type { GroupMemberDetails } from '../types/group-member.type';
 import type {
   MessageActionResult,
@@ -86,7 +91,7 @@ export const conversationsApi = {
     return response.data.data;
   },
 
-  getOrCreateDirectConversation: async (userId: string): Promise<Conversation> => {
+  getOrCreateDirectConversation: async (userId: string): Promise<ConversationOpenResult> => {
     const response = await apiClient.post(`/conversations/direct/${userId}`);
     return response.data.data;
   },
@@ -118,7 +123,14 @@ export const conversationsApi = {
     return response.data.data;
   },
 
-  unhideConversation: async (conversationId: string): Promise<ConversationActionResult> => {
+  clearConversationHistory: async (
+    conversationId: string,
+  ): Promise<ConversationHistoryClearResult> => {
+    const response = await apiClient.delete(`/conversations/${conversationId}/history`);
+    return response.data.data;
+  },
+
+  unhideConversation: async (conversationId: string): Promise<ConversationOpenResult> => {
     const response = await apiClient.post(`/conversations/${conversationId}/unhide`);
     return response.data.data;
   },
@@ -191,6 +203,17 @@ export const conversationsApi = {
 
   leaveGroup: async (conversationId: string): Promise<ConversationActionResult> => {
     const response = await apiClient.delete(`/conversations/${conversationId}/leave`);
+    return response.data.data;
+  },
+
+  transferAdminAndLeave: async (
+    conversationId: string,
+    payload: TransferAdminAndLeavePayload,
+  ): Promise<ConversationActionResult> => {
+    const response = await apiClient.post(
+      `/conversations/${conversationId}/transfer-admin-and-leave`,
+      payload,
+    );
     return response.data.data;
   },
 

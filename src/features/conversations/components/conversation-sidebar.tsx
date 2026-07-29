@@ -21,9 +21,20 @@ export const ConversationSidebar = () => {
     setSearchQuery('');
     setIsSearchFocused(false);
   };
+  const handleSidebarBlur = (event: React.FocusEvent<HTMLDivElement>) => {
+    const nextFocusedElement = event.relatedTarget;
+    if (nextFocusedElement instanceof Node && event.currentTarget.contains(nextFocusedElement)) {
+      return;
+    }
+
+    setIsSearchFocused(false);
+  };
 
   return (
-    <div className="w-full sm:w-[350px] h-full flex flex-col bg-black">
+    <div
+      onBlurCapture={handleSidebarBlur}
+      className="w-full sm:w-[350px] h-full flex flex-col bg-black"
+    >
       {/* Header */}
       <div className="p-4 flex items-center justify-between border-b border-[#2f3336]">
         <h2 className="text-xl font-bold text-white">Messages</h2>
@@ -43,10 +54,6 @@ export const ConversationSidebar = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => setIsSearchFocused(true)}
-            onBlur={() => {
-              // Delay hiding search results so clicks can register
-              setTimeout(() => setIsSearchFocused(false), 200);
-            }}
             placeholder="Search people and groups"
             aria-label="Search people and groups"
             className="w-full bg-[#202327] text-white rounded-full py-2 pl-12 pr-4 focus:outline-none focus:bg-black focus:ring-1 focus:ring-white border border-transparent focus:border-white transition"

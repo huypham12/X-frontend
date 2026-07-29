@@ -21,7 +21,14 @@ interface ChatWindowProps {
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
   const router = useRouter();
-  const { data: conversations, isLoading, isError, refetch } = useConversations();
+  const {
+    data: conversations,
+    isLoading,
+    isFetching,
+    isError,
+    isRefetchError,
+    refetch,
+  } = useConversations();
   const { isOnlineFriend } = useFriendPresence();
   const infoButtonRef = useRef<HTMLButtonElement>(null);
   const openConversationId = useConversationDetailsStore((state) => state.openConversationId);
@@ -53,7 +60,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
   }, [clearReply, conversationId]);
 
   if (!conversation) {
-    if (isError) {
+    if (isError || isRefetchError) {
       return (
         <div className="flex flex-1 flex-col items-center justify-center bg-black px-6 text-center">
           <p className="text-sm text-gray-400">Could not load this conversation.</p>
@@ -70,12 +77,30 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
       );
     }
 
+    if (isLoading || isFetching) {
+      return (
+        <div className="flex-1 flex items-center justify-center bg-black">
+          <div
+            role="status"
+            aria-label="Loading conversation"
+            className="h-24 w-24 animate-pulse rounded-full bg-[#181818]"
+          />
+        </div>
+      );
+    }
+
     return (
-      <div className="flex-1 flex items-center justify-center bg-black">
-        <div
-          aria-label={isLoading ? 'Loading conversation' : 'Conversation unavailable'}
-          className="h-24 w-24 animate-pulse rounded-full bg-[#181818]"
-        />
+      <div className="flex flex-1 flex-col items-center justify-center bg-black px-6 text-center">
+        <p className="text-sm text-gray-400">This conversation is unavailable.</p>
+        <button
+          type="button"
+          onClick={() => {
+            void refetch();
+          }}
+          className="mt-4 min-h-11 rounded-full border border-[#536471] px-5 text-sm font-semibold text-white hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        >
+          Retry
+        </button>
       </div>
     );
   }
