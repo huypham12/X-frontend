@@ -604,7 +604,7 @@ data: { success: true, cleared_at: ISODate }
 
 ## Phase 17 — Release audit và cập nhật tài liệu
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Chức năng:** không mở thêm feature; khóa chất lượng toàn bộ kế hoạch.
 
