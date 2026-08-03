@@ -3,17 +3,32 @@ import { useEffect } from 'react';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { userService } from '@/features/users/api/user.service';
 import Cookies from 'js-cookie';
+import { refreshAccessToken } from '@/services/api.client';
 
 export function AuthInitializer() {
   const setAuth = useAuthStore((state) => state.setAuth);
+  const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   useEffect(() => {
     const fetchUser = async () => {
-      const token = Cookies.get('access_token');
-      // Chỉ fetch nếu có token mà chưa có user
-      if (token && !user) {
+      let token = Cookies.get('access_token');
+      if (!token) {
+        if (!Cookies.get('refresh_token')) {
+          logout();
+          return;
+        }
+        try {
+          token = await refreshAccessToken();
+        } catch {
+          logout();
+          return;
+        }
+      }
+
+      // Đồng bộ lại store persisted nếu cookie và auth state bị lệch nhau.
+      if (!user || !isAuthenticated) {
         try {
           const data = await userService.getMe();
           if (data && data[0]) {
@@ -24,8 +39,8 @@ export function AuthInitializer() {
         }
       }
     };
-    fetchUser();
-  }, [setAuth, user, isAuthenticated]);
+    void fetchUser();
+  }, [setAuth, logout, user, isAuthenticated]);
 
   return null;
 }

@@ -11,6 +11,42 @@ export const apiClient = axios.create({
   },
 });
 
+interface RefreshTokenResponse {
+  data: {
+    access_token: string;
+    refresh_token: string;
+  };
+}
+
+let refreshAccessTokenRequest: Promise<string> | null = null;
+
+export const refreshAccessToken = (): Promise<string> => {
+  if (refreshAccessTokenRequest) return refreshAccessTokenRequest;
+
+  refreshAccessTokenRequest = (async () => {
+    const refreshToken = Cookies.get('refresh_token');
+    if (!refreshToken) throw new Error('No refresh token available');
+
+    const response = await axios.post<RefreshTokenResponse>(`${API_URL}/auth/refresh-token`, {
+      refresh_token: refreshToken,
+    });
+    const { access_token, refresh_token } = response.data.data;
+
+    Cookies.set('access_token', access_token, { expires: 1 });
+    Cookies.set('refresh_token', refresh_token, { expires: 30 });
+    return access_token;
+  })().finally(() => {
+    refreshAccessTokenRequest = null;
+  });
+
+  return refreshAccessTokenRequest;
+};
+
+export const clearClientAuth = (): void => {
+  Cookies.remove('access_token');
+  Cookies.remove('refresh_token');
+};
+
 apiClient.interceptors.request.use((config) => {
   const token = Cookies.get('access_token');
   if (token && config.headers) {
@@ -27,23 +63,11 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
-        const refreshToken = Cookies.get('refresh_token');
-        if (!refreshToken) {
-          throw new Error('No refresh token available');
-        }
-
-        const res = await axios.post(`${API_URL}/auth/refresh-token`, { refresh_token: refreshToken });
-        
-        const { access_token, refresh_token: new_refresh_token } = res.data.data;
-        
-        Cookies.set('access_token', access_token, { expires: 1 });
-        Cookies.set('refresh_token', new_refresh_token, { expires: 30 });
-        
+        const access_token = await refreshAccessToken();
         originalRequest.headers.Authorization = `Bearer ${access_token}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
-        Cookies.remove('access_token');
-        Cookies.remove('refresh_token');
+        clearClientAuth();
         if (typeof window !== 'undefined') {
           localStorage.removeItem('auth-storage');
           window.location.href = '/login';

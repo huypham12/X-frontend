@@ -6,6 +6,7 @@ import Cookies from 'js-cookie';
 import { useQueryClient } from '@tanstack/react-query';
 import { useConversationSocketSync } from '@/features/conversations/hooks/use-conversation-socket-sync';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { clearClientAuth, refreshAccessToken } from '@/services/api.client';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -24,54 +25,89 @@ export const useSocket = () => {
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const logout = useAuthStore((state) => state.logout);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   useConversationSocketSync(socket);
 
   useEffect(() => {
-    const token = Cookies.get('access_token');
-    if (!isAuthenticated || !token) {
-      return;
-    }
+    if (!isAuthenticated) return;
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
     const baseUrl = apiUrl.replace(/\/api\/?$/, '');
-    const socketInstance = io(baseUrl, {
-      auth: (callback) => callback({ token: Cookies.get('access_token') }),
-    });
+    let disposed = false;
+    let socketInstance: Socket | null = null;
+    let refreshingAuthentication = false;
 
-    socketInstance.on('connect', () => {
+    const clearInvalidSession = () => {
+      clearClientAuth();
+      logout();
+    };
+
+    const connect = async () => {
+      let token = Cookies.get('access_token');
+      if (!token) {
+        try {
+          token = await refreshAccessToken();
+        } catch {
+          if (!disposed) clearInvalidSession();
+          return;
+        }
+      }
+
+      if (disposed) return;
+
+      socketInstance = io(baseUrl, {
+        autoConnect: false,
+        auth: (callback) => callback({ token: Cookies.get('access_token') }),
+      });
       setSocket(socketInstance);
-      setIsConnected(true);
-    });
 
-    const handleDisconnected = () => {
-      setIsConnected(false);
+      socketInstance.on('connect', () => {
+        setIsConnected(true);
+      });
+
+      const handleDisconnected = () => {
+        setIsConnected(false);
+      };
+
+      const handleConnectError = async (error: Error) => {
+        setIsConnected(false);
+        console.error('Socket connection failed:', error.message);
+
+        if (!error.message.startsWith('Authentication error:') || refreshingAuthentication) return;
+        refreshingAuthentication = true;
+        try {
+          await refreshAccessToken();
+          if (!disposed) socketInstance?.connect();
+        } catch {
+          if (!disposed) clearInvalidSession();
+        } finally {
+          refreshingAuthentication = false;
+        }
+      };
+
+      socketInstance.on('disconnect', handleDisconnected);
+      socketInstance.on('connect_error', handleConnectError);
+
+      const handleBlockStatusChanged = () => {
+        void queryClient.invalidateQueries({ queryKey: ['user'] });
+      };
+
+      socketInstance.on('@user:block-status-changed', handleBlockStatusChanged);
+      socketInstance.connect();
     };
 
-    const handleConnectError = (error: Error) => {
-      setIsConnected(false);
-      console.error('Socket connection failed:', error.message);
-    };
-
-    socketInstance.on('disconnect', handleDisconnected);
-    socketInstance.on('connect_error', handleConnectError);
-
-    const handleBlockStatusChanged = () => {
-      void queryClient.invalidateQueries({ queryKey: ['user'] });
-    };
-
-    socketInstance.on('@user:block-status-changed', handleBlockStatusChanged);
+    void connect();
 
     return () => {
-      socketInstance.off('@user:block-status-changed', handleBlockStatusChanged);
-      socketInstance.off('disconnect', handleDisconnected);
-      socketInstance.off('connect_error', handleConnectError);
-      socketInstance.disconnect();
+      disposed = true;
+      socketInstance?.removeAllListeners();
+      socketInstance?.disconnect();
       setSocket(null);
       setIsConnected(false);
     };
-  }, [isAuthenticated, queryClient]);
+  }, [isAuthenticated, logout, queryClient]);
 
   return (
     <SocketContext.Provider value={{ socket, isConnected }}>
