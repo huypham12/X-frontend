@@ -43,7 +43,7 @@ System message là activity bất biến trong lịch sử group, có `kind=syst
 - Realtime dùng `@notification:unread-count`, `@notification:read-state` và count/version đi kèm `@notification:removed`. Chỉ áp dụng count khi `version` không cũ hơn state hiện có; event count riêng yêu cầu `version` lớn hơn state đang giữ.
 - Count bằng `0`: không render badge, nhưng icon và vùng bấm giữ nguyên kích thước và accessible name.
 - Count từ `1` đến `99`: hiển thị số chính xác. Count từ `100` trở lên: hiển thị `99+`; accessible label vẫn thông báo số chính xác từ backend.
-- Aggregate Like/Repost/Reaction có nhiều actor vẫn tăng badge tối đa một item trong active window. `@notification:updated` không tăng badge.
+- Aggregate Like/Repost có nhiều actor vẫn tăng badge tối đa một item trong active window. `@notification:updated` không tăng badge. Message reaction không thuộc Notification policy và không tăng badge.
 
 ### Badge Messages
 
@@ -122,8 +122,6 @@ Row dùng padding 16–20 px, khoảng trắng thoáng, border mảnh và bảng
 | `mention` | “{actor} đã nhắc đến bạn trong một bài viết”. Preview tweet chứa mention. | Mở target tweet; nếu có parent context, mở trong đúng thread. |
 | `message_reply` | “{actor} đã trả lời tin nhắn của bạn”. Preview `target_info.content`; conversation lấy từ `context.conversation_id`. | Mở conversation rồi focus/scroll tới message `target_id` khi có thể tải được. |
 | `message_mention` | “{actor} đã nhắc đến bạn trong nhóm”. Preview message; context xác định conversation. | Mở conversation rồi focus/scroll tới message `target_id`. |
-| `message_reaction` | “{actor/actors} đã bày tỏ cảm xúc {context.emoji} với tin nhắn của bạn”. Đây là aggregate; preview target message. | Mở conversation trong context rồi focus target message. |
-| `message` | Compatibility item: “{actor} đã gửi cho bạn một tin nhắn”. Không coi đây là runtime flow mới. | Mở conversation bằng `target_info._id`, fallback target ID còn hợp lệ. Không hứa deep-link message. |
 | `group_add` | “Bạn đã được thêm vào nhóm {tên nhóm nếu target projection có}”. | Mở conversation nếu còn membership và target hydrate được. |
 | `group_join` | Compatibility item: “{actor} đã tham gia nhóm”. | Mở conversation nếu target hydrate được. |
 | `group_kick` | “Bạn đã bị xóa khỏi nhóm”. Không hiển thị nội dung riêng tư của group khi target null. | Không đưa CTA mở group nếu `target_info=null`; đồng thời dọn route/cache như mục Group events. |
@@ -132,6 +130,8 @@ Row dùng padding 16–20 px, khoảng trắng thoáng, border mảnh và bảng
 | `system` | Dùng nội dung generic an toàn và target thực tế nếu có; không suy diễn actor/target từ `context={}`. | Chỉ điều hướng khi `target_type` và target còn hydrate hợp lệ. |
 
 Type không nhận diện được phải dùng fallback an toàn “Bạn có một thông báo mới”, vẫn hiển thị timestamp/read state, không dựng route từ field không có. Việc hỗ trợ fallback không đồng nghĩa frontend tự định nghĩa type mới.
+
+Generic `message` và `message_reaction` không phải Notification feed type hợp lệ. Backend không tạo mới, durable feed không trả và unread state không tính hai type này; local development dùng notification data baseline sạch thay vì migration legacy, frontend không filter riêng làm lệch badge.
 
 ### Loading, empty, error và pagination
 
@@ -234,6 +234,7 @@ Mỗi row hiển thị avatar, tên conversation, preview message cuối, timest
 - `@conversation:read` và REST read là hai cách gọi cùng semantics; frontend chọn một đường chính và dùng REST làm fallback/reconcile, không gửi đồng thời không cần thiết.
 - Áp dụng ack/read-state như state có thẩm quyền, không phải delta. Payload `version` nhỏ hơn state hiện tại bị bỏ qua; payload bằng version có thể dùng để đồng bộ row tương ứng.
 - Read của chính user không đồng nghĩa backend cung cấp read receipt của participant khác.
+- Sau khi backend commit exact read position, các `message_reply`/`message_mention` trỏ message đã thực sự được xem phải được backend invalidate; Notification feed/badge nhận remove/count-version hoặc REST reconciliation. Frontend không tự ẩn item chỉ vì route mở. Capability phối hợp này thuộc Phase 6.
 
 ### Socket reconnect
 
@@ -258,8 +259,8 @@ Mỗi row hiển thị avatar, tên conversation, preview message cuối, timest
 | --- | --- | --- | --- | --- |
 | Message reply hợp lệ | Có `message_reply` cho owner của message được reply, trừ khi recipient đồng thời được group mention thì chỉ có `message_mention`. | Có, vì đây vẫn là message mới; read phụ thuộc active/visible/ack. | Append message; hiển thị reply preview khi dữ liệu hydrated hỗ trợ. | Conversation cụ thể, sau đó target message mới `target_id`; original reply ID ở `context.reply_to_message_id` khi có. |
 | Group mention | Có `message_mention` cho member được mention. | Có. Highlight message khi `mention_user_ids` chứa current user. | Append, highlight mention; không tạo notification duplicate. | Conversation và message cụ thể. |
-| Message reaction | Có aggregate `message_reaction` cho owner message khi actor khác reaction và feature backend đang bật. | Không tăng unread message/conversation vì reaction không phải message mới. | `@message:reaction-updated` replace reaction list/summary của bubble, không refetch toàn conversation. | Conversation và message bị reaction. |
-| Generic direct message | Không có runtime notification activity item; `message` chỉ là compatibility type nếu dữ liệu cũ trả về. | Có nếu message chưa được đọc. | Append/upsert và update conversation. | Từ Inbox mở conversation; legacy notification nếu có cũng chỉ mở conversation. |
+| Message reaction | Không. Reaction chỉ là activity trong Chat. | Không tăng unread message/conversation vì reaction không phải message mới. | `@message:reaction-updated` replace reaction list/summary của bubble, không refetch toàn conversation. | Xem tại message bubble trong conversation; không có Notification deep-link riêng. |
+| Generic direct message | Không. Generic `message` bị loại khỏi durable Notification policy. | Có nếu message chưa được đọc. | Append/upsert và update conversation. | Từ Inbox mở conversation. |
 | Generic group message không directed | Không có notification activity item. | Có nếu message chưa được đọc. | Append/upsert; sender preview và group row cập nhật. | Từ Inbox mở conversation. |
 
 Mute không suppress `message_reply` hoặc `message_mention` in-app. Khi directed notification backend bị tắt, message vẫn giao và Inbox vẫn cập nhật; frontend không tự tạo generic notification để bù.
@@ -424,7 +425,7 @@ System message dùng presentation căn giữa, icon nhỏ trung tính, text ph�
 - Không append notification/message trùng; luôn upsert/dedupe theo ID phù hợp.
 - Không hiển thị mọi socket event thành notification item hoặc toast.
 - Không tự tạo generic message notification khi backend chỉ cập nhật Inbox.
-- Không tự aggregate Like, Repost hoặc Message Reaction.
+- Không tự aggregate Like/Repost và không tự tạo Notification item từ Message Reaction.
 - Không merge hai aggregate window khác `_id` dù trùng target/key.
 - Không remove notification chỉ vì actor/target hydration là null.
 - Không điều hướng tới target đã null/redact hoặc cố fetch nội dung group sau khi user bị kick.

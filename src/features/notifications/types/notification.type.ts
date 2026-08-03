@@ -6,10 +6,8 @@ export type NotificationType =
   | 'follow'
   | 'mention'
   | 'system'
-  | 'message'
   | 'message_reply'
   | 'message_mention'
-  | 'message_reaction'
   | 'group_add'
   | 'group_join'
   | 'group_kick'
@@ -76,11 +74,6 @@ export interface DirectedMessageNotificationContext extends NotificationContextB
   reply_to_message_id?: string;
 }
 
-export interface MessageReactionNotificationContext
-  extends DirectedMessageNotificationContext {
-  emoji?: string;
-}
-
 export interface GroupManagementNotificationContext extends NotificationContextBase {
   system_event_type?:
     | 'group_created'
@@ -102,10 +95,8 @@ export interface NotificationContextByType {
   follow: NotificationContextBase;
   mention: TweetNotificationContext;
   system: NotificationContextBase;
-  message: DirectedMessageNotificationContext;
   message_reply: DirectedMessageNotificationContext;
   message_mention: DirectedMessageNotificationContext;
-  message_reaction: MessageReactionNotificationContext;
   group_add: GroupManagementNotificationContext;
   group_join: GroupManagementNotificationContext;
   group_kick: GroupManagementNotificationContext;

@@ -82,6 +82,19 @@ Nếu một dependency bắt buộc hoặc gate đầu vào chưa đạt:
 - Không sửa capability còn thiếu đã được giao cho phase sau. Ví dụ, nếu Phase [X] không bao gồm Notification route/feed, Inbox landing hoặc active-read behavior thì việc chúng chưa tồn tại không phải lý do để triển khai trước.
 - Không sửa hoặc format lại file ngoài change set cần thiết của Phase [X].
 
+### Ngoại lệ có chủ đích cho Phase 4.2
+
+Khi và chỉ khi `X=4.2`, đây là phase phối hợp frontend/backend đã được sản phẩm phê duyệt để thay đổi notification relevance policy:
+
+- Được sửa backend trong `../X-ver2` nhưng chỉ giới hạn ở generation/suppression, durable feed, notification unread state/count/version, contract cùng targeted tests liên quan trực tiếp.
+- Phải xác lập change boundary riêng cho cả frontend và backend, đọc quy tắc repo backend nếu có, và không ghi đè change set Phase 4 đang tồn tại ở frontend.
+- Generic `message` và `message_reaction` không còn được tạo mới, trả trong durable Notification feed hoặc tính vào Notifications badge. Không được chỉ filter frontend làm feed/count lệch nhau.
+- Không thêm migration marker hoặc lazy reconciliation cho dữ liệu legacy. Dự án đang phát triển local nên reset notification data/cache về baseline sạch trước khi nghiệm thu Phase 4.2; prompt không tự chạy thao tác xóa dữ liệu.
+- Frontend bỏ presentation/navigation runtime riêng cho hai type sau khi backend contract bảo đảm suppression, nhưng vẫn giữ unknown-type fallback an toàn; Inbox unread và message reaction trong Chat không bị thay đổi.
+- Không triển khai active conversation read acknowledgement trong Phase 4.2. Việc user thực sự xem message làm directed `message_reply`/`message_mention` liên quan biến mất thuộc Phase 6 và phải được giữ làm dependency/handoff rõ trong kế hoạch.
+- Không mở hoặc gộp Phase 4.1; Phase 4.1 tiếp tục dành riêng cho hydrated realtime notification contract.
+- Bắt buộc chạy static/build và targeted tests phù hợp ở cả hai repo; không chạy runtime account/E2E hoặc tự xóa dữ liệu môi trường thật.
+
 ## 3. Yêu cầu kiến trúc và code
 
 1. Tuân thủ Feature-Sliced Design:

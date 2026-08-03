@@ -613,7 +613,7 @@ Remove badge/hooks/mobile nav và trả Sidebar markup cũ; foundation cache/lis
 
 ### Phase 4 — Durable Notification feed, read actions và safe navigation
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Mục tiêu**
 
@@ -642,7 +642,7 @@ Tạo Notification tab hoàn chỉnh trên REST, hưởng realtime cache sync đ
 
 - Notification feed/read endpoints.
 - Actor/target projections và context.
-- All current notification types: `follow`, `followed_user_tweet`, `like`, `retweet`, `quote`, `reply`, `mention`, `message_reply`, `message_mention`, `message_reaction`, compatibility `message`, group types và `system`.
+- All notification types còn eligible sau Phase 4.2: `follow`, `followed_user_tweet`, `like`, `retweet`, `quote`, `reply`, `mention`, `message_reply`, `message_mention`, group types và `system`; `message`/`message_reaction` không vào feed/count.
 
 **File tạo mới**
 
@@ -743,6 +743,68 @@ Remove route/notification UI/hooks; badges/realtime foundation tiếp tục ho�
 - **Frontend file cần cập nhật:** `notifications.api.ts`, notification types, socket sync/cache helper, feed/toast presentation.
 - **Acceptance criteria:** Event mới hydrate deterministic không cần scan pages; redacted target vẫn null; duplicate event không thêm row/count; reconnect vẫn REST reconcile.
 - **Gate:** `npx tsc --noEmit` cho frontend; backend verification do người dùng/backend workflow thực hiện, không nằm trong phase frontend tự chạy.
+
+#### Phase 4.2 — Notification relevance policy
+
+**Trạng thái: Đã hoàn thành.**
+
+**Mục tiêu**
+
+Giữ Notification tab tập trung vào social activity, directed reply/mention và group management; loại generic `message` cùng `message_reaction` khỏi durable Notification feed và Notifications badge mà không làm lệch unread state. Reaction trong Chat và Inbox unread vẫn hoạt động bình thường.
+
+**Phạm vi frontend**
+
+- Bỏ `message` và `message_reaction` khỏi notification type/presentation/navigation runtime sau khi backend có guarantee tương ứng.
+- Giữ unknown-type fallback an toàn để payload ngoài contract không crash hoặc dựng route giả.
+- Không filter riêng ở component/feed khi backend unread state vẫn còn tính item; feed và badge phải cùng policy authoritative.
+- Không thay đổi `@message:reaction-updated`, reaction UI trong Chat, conversation unread hoặc Messages badge.
+
+**Phạm vi backend được phê duyệt riêng cho phase này**
+
+- Dừng generation/publish `message_reaction`; xác nhận generic `message` tiếp tục không có runtime business caller.
+- Durable `GET /api/notifications` không trả `message` hoặc `message_reaction`.
+- Notification unread state/count/version không tính hai type này.
+- Không thêm `policy_version`, migration marker hoặc lazy cleanup. Reset notification data/cache local về baseline sạch trước khi nghiệm thu policy mới.
+- Cập nhật frontend notification contract và targeted backend verification cho policy mới.
+
+**Phụ thuộc**
+
+- Phase 1–4 hoàn thành.
+- Backend source và contract hiện hành là nguồn chân lý; Phase 4.1 không phải dependency.
+
+**Luồng dữ liệu sau phase**
+
+Message thường -> conversation/inbox unread. Message reaction -> Chat reaction state qua `@message:reaction-updated`. Directed `message_reply`/`message_mention` -> Notification feed và Inbox theo contract. REST notification feed + unread state chỉ chứa/count notification type còn eligible.
+
+**Local baseline**
+
+- Reset notification-related data và frontend cache local trước khi nghiệm thu Phase 4.2.
+- Không hỗ trợ nâng cấp tại chỗ từ unread state đã chứa `message`/`message_reaction`; đây là chủ đích trong giai đoạn phát triển local.
+- Sau baseline sạch, reconnect/focus vẫn dùng REST authoritative state như các phase trước.
+
+**Những việc không làm**
+
+- Không loại `message_reply` hoặc `message_mention`.
+- Không thay đổi reaction command/state trong Chat.
+- Không chỉ ẩn row ở frontend.
+- Không tự xóa database môi trường hoặc tạo account/test data.
+- Không triển khai điều kiện message-visible/read acknowledgement của active conversation; phần này thuộc Phase 6.
+
+**Gate hoàn thành**
+
+- Business reaction mới không tạo notification activity item; generic message mới chỉ cập nhật Inbox.
+- Feed và Notifications badge cùng loại `message`/`message_reaction` trên baseline local sạch.
+- `message_reply`/`message_mention`, social và group notification không regress.
+- Notification count/version vẫn authoritative và không cần policy-specific migration state.
+- Frontend/backend compile, targeted lint/test liên quan pass; không thêm fake DTO/local delta.
+
+**Handoff Phase 6**
+
+Khi Phase 6 xác nhận user thực sự đã xem exact message và backend commit conversation read acknowledgement, backend phải invalidate directed `message_reply`/`message_mention` trỏ các message nằm trong read position phù hợp; frontend nhận remove/count-version hoặc REST reconciliation để item biến mất khỏi Notification feed mà không tự suy diễn từ việc mở route.
+
+**Rollback đơn giản**
+
+Khôi phục policy generation/query contract trước phase rồi reset lại notification data/cache local; frontend không tự dựng item.
 
 ### Phase 5 — Inbox route, conversation unread và row semantics
 
@@ -879,6 +941,7 @@ Gửi read acknowledgement đúng message thực sự được xem, đồng bộ
 - Ack exact `message_id`, authoritative response application.
 - New-message pill khi user đang đọc đoạn cũ.
 - Hidden tab, reconnect, 403 membership loss.
+- Sau read acknowledgement authoritative, backend invalidate `message_reply`/`message_mention` nằm trong read position và frontend remove/reconcile Notification feed + unread count theo ID/version; không suy diễn từ route mount.
 
 **Phụ thuộc**
 
@@ -894,6 +957,7 @@ Gửi read acknowledgement đúng message thực sự được xem, đồng bộ
 
 - REST/socket read command và `@conversation:read-state`.
 - Read position chỉ tiến, message sau target vẫn unread.
+- Directed-notification invalidation/removal gắn với exact committed read position; nếu backend chưa có capability này thì Phase 6 phải báo backend gap, không tự ẩn row ở frontend.
 
 **File tạo mới**
 
@@ -955,6 +1019,7 @@ Message rendered + document visible + UI read rule -> exact read command -> ack/
 
 - Bốn trường hợp active-bottom, active-scrolled, hidden-tab, other-conversation có behavior xác định và không dùng local unread delta.
 - Ack exact ID và state application versioned.
+- Directed message notification đã thực sự xem biến mất qua backend invalidation, đồng thời Notification badge/feed vẫn authoritative và multi-tab safe.
 - MessageList responsibility được tách đủ để không thêm một chuỗi effect khó kiểm soát.
 
 **Điều kiện mở Phase 6.1**
@@ -1028,7 +1093,7 @@ Submit -> tạo một operation ID -> emit -> ack/receive có thể đến bất
 
 - Same `_id`/client operation không append lần hai.
 - Timeout retry đúng ID; conflict payload không auto retry.
-- Reaction only patches bubble/activity notification qua hai event family riêng.
+- Reaction chỉ patch bubble qua `@message:reaction-updated`; không tạo Notification activity item theo policy Phase 4.2.
 - Frontend không tạo notification từ receive.
 
 **UI states**

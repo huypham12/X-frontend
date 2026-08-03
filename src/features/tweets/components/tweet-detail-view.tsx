@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useInView } from 'react-intersection-observer';
 import { ArrowLeft } from 'lucide-react';
 import { tweetService } from '../api/tweet.service';
@@ -26,7 +26,9 @@ const ThreadSkeleton = () => (
 export function TweetDetailView() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const tweetId = params.id;
+  const focusTweetId = searchParams.get('focus');
   const { ref, inView } = useInView();
 
   const { data: tweet, isLoading: isTweetLoading } = useQuery({
@@ -53,13 +55,28 @@ export function TweetDetailView() {
     enabled: Boolean(tweetId),
   });
 
+  const { data: focusedTweet } = useQuery({
+    queryKey: ['tweets', focusTweetId],
+    queryFn: async () => {
+      if (!focusTweetId) throw new Error('Focused tweet ID is unavailable');
+      return (await tweetService.getTweet(focusTweetId)) as Tweet;
+    },
+    enabled: Boolean(focusTweetId && focusTweetId !== tweetId),
+  });
+
   useEffect(() => {
     if (inView && hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
     }
   }, [fetchNextPage, hasNextPage, inView, isFetchingNextPage]);
 
-  const directChildren = replies?.pages.flatMap((page) => page.tweets ?? []) ?? [];
+  const directChildren = useMemo(() => {
+    const loadedReplies = replies?.pages.flatMap((page) => page.tweets ?? []) ?? [];
+    if (!focusedTweet || loadedReplies.some((reply) => reply._id === focusedTweet._id)) {
+      return loadedReplies;
+    }
+    return [...loadedReplies, focusedTweet];
+  }, [focusedTweet, replies]);
 
   return (
     <div className="min-h-screen w-full">
@@ -94,6 +111,7 @@ export function TweetDetailView() {
           hasNextPage={Boolean(hasNextPage)}
           isFetchingNextPage={isFetchingNextPage}
           loadMoreRef={ref}
+          focusTweetId={focusTweetId}
         />
       )}
     </div>

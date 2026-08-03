@@ -1,6 +1,8 @@
 import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 import { notificationKeys } from '../constants/notification-query-keys';
 import type {
+  MarkAllNotificationsReadResult,
+  MarkNotificationReadResult,
   NotificationPageData,
   NotificationReadStateEvent,
   NotificationRemovedEvent,
@@ -9,6 +11,10 @@ import type {
 } from '../types/notification.type';
 
 type NotificationFeedData = InfiniteData<NotificationPageData>;
+
+type NotificationReadResult =
+  | MarkNotificationReadResult
+  | MarkAllNotificationsReadResult;
 
 const updateUnreadState = (
   queryClient: QueryClient,
@@ -53,6 +59,28 @@ export const invalidateNotificationUnread = (queryClient: QueryClient) => {
   return queryClient.invalidateQueries({
     queryKey: notificationKeys.unread(),
     refetchType: 'active',
+  });
+};
+
+export const applyNotificationReadResult = (
+  queryClient: QueryClient,
+  result: NotificationReadResult,
+) => {
+  const current = queryClient.getQueryData<NotificationUnreadState>(
+    notificationKeys.unread(),
+  );
+
+  if (!current) {
+    void invalidateNotificationUnread(queryClient);
+    return;
+  }
+
+  if (result.version < current.version) return;
+
+  queryClient.setQueryData<NotificationUnreadState>(notificationKeys.unread(), {
+    ...current,
+    unreadCount: result.unreadCount,
+    version: result.version,
   });
 };
 
