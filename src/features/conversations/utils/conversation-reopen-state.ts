@@ -17,3 +17,7 @@ export const wasConversationReopenedAfter = (
 export const clearConversationReopenedMarker = (conversationId: string) => {
   conversationReopenedAtById.delete(conversationId);
 };
+
+export const clearAllConversationReopenedMarkers = () => {
+  conversationReopenedAtById.clear();
+};

@@ -26,6 +26,17 @@ import type {
   MessageReactionEmoji,
   MessageReactionState,
 } from '../types/message-action.type';
+import type {
+  ConversationReadRequest,
+  ConversationReadResult,
+  ConversationUnreadSummary,
+} from '../types/conversation-unread.type';
+
+interface ApiResponse<TData> {
+  statusCode: number;
+  message: string;
+  data: TData;
+}
 
 export const conversationsApi = {
   getConversations: async (): Promise<Conversation[]> => {
@@ -135,8 +146,21 @@ export const conversationsApi = {
     return response.data.data;
   },
 
-  markAsRead: async (conversationId: string): Promise<{ success: boolean }> => {
-    const response = await apiClient.post(`/conversations/${conversationId}/read`);
+  getUnreadSummary: async (): Promise<ConversationUnreadSummary> => {
+    const response = await apiClient.get<ApiResponse<ConversationUnreadSummary>>(
+      '/conversations/unread-summary',
+    );
+    return response.data.data;
+  },
+
+  markAsRead: async (
+    conversationId: string,
+    request: ConversationReadRequest = {},
+  ): Promise<ConversationReadResult> => {
+    const response = await apiClient.post<ApiResponse<ConversationReadResult>>(
+      `/conversations/${conversationId}/read`,
+      request,
+    );
     return response.data.data;
   },
 

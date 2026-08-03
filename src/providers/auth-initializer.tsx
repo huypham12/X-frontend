@@ -4,43 +4,56 @@ import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { userService } from '@/features/users/api/user.service';
 import Cookies from 'js-cookie';
 import { refreshAccessToken } from '@/services/api.client';
+import { getAuthenticatedUser } from '@/features/auth/utils/auth-user';
 
 export function AuthInitializer() {
-  const setAuth = useAuthStore((state) => state.setAuth);
-  const logout = useAuthStore((state) => state.logout);
-  const user = useAuthStore((state) => state.user);
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const startAuthentication = useAuthStore((state) => state.startAuthentication);
+  const setAuthenticationTokens = useAuthStore((state) => state.setAuthenticationTokens);
+  const completeAuthentication = useAuthStore((state) => state.completeAuthentication);
+  const failAuthentication = useAuthStore((state) => state.failAuthentication);
 
   useEffect(() => {
-    const fetchUser = async () => {
+    let disposed = false;
+
+    const hydrateSession = async () => {
+      const attemptId = startAuthentication();
       let token = Cookies.get('access_token');
       if (!token) {
         if (!Cookies.get('refresh_token')) {
-          logout();
+          if (!disposed) failAuthentication(attemptId);
           return;
         }
         try {
           token = await refreshAccessToken();
         } catch {
-          logout();
+          if (!disposed) failAuthentication(attemptId);
           return;
         }
       }
 
-      // Đồng bộ lại store persisted nếu cookie và auth state bị lệch nhau.
-      if (!user || !isAuthenticated) {
-        try {
-          const data = await userService.getMe();
-          if (data && data[0]) {
-            setAuth(data[0], token, Cookies.get('refresh_token') || '');
-          }
-        } catch (error) {
-          console.error("Failed to fetch user profile", error);
-        }
+      if (disposed) return;
+      const isCurrentAttempt = setAuthenticationTokens(
+        attemptId,
+        token,
+        Cookies.get('refresh_token'),
+      );
+      if (!isCurrentAttempt) return;
+
+      try {
+        const userData: unknown = await userService.getMe();
+        const currentUser = getAuthenticatedUser(userData);
+        if (!currentUser) throw new Error('Invalid current-user response');
+        if (!disposed) completeAuthentication(attemptId, currentUser);
+      } catch {
+        if (!disposed) failAuthentication(attemptId);
       }
     };
-    void fetchUser();
-  }, [setAuth, logout, user, isAuthenticated]);
+
+    void hydrateSession();
+    return () => {
+      disposed = true;
+    };
+  }, [completeAuthentication, failAuthentication, setAuthenticationTokens, startAuthentication]);
 
   return null;
 }

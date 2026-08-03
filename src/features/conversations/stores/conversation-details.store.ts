@@ -11,6 +11,7 @@ interface ConversationDetailsState {
   openView: (view: ConversationPanelView) => void;
   focusMessage: (conversationId: string, messageId: string) => void;
   clearFocusedMessage: () => void;
+  reset: () => void;
 }
 
 const CLOSED_DETAILS_STATE = {
@@ -46,4 +47,5 @@ export const useConversationDetailsStore = create<ConversationDetailsState>((set
       targetMessageId: messageId,
     }),
   clearFocusedMessage: () => set({ targetConversationId: null, targetMessageId: null }),
+  reset: () => set(CLOSED_DETAILS_STATE),
 }));

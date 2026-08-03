@@ -12,7 +12,10 @@ export type GroupUpdateChangeType =
   | 'members_added'
   | 'member_removed'
   | 'member_left'
-  | 'admin_transferred';
+  | 'admin_transferred'
+  | 'group_created'
+  | 'admin_granted'
+  | 'admin_revoked';
 
 export interface GroupUpdatedEvent {
   conversation_id: string;

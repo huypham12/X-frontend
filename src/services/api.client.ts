@@ -2,7 +2,6 @@ import axios from 'axios';
 import Cookies from 'js-cookie';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-console.log("API_URL IS:", API_URL);
 
 export const apiClient = axios.create({
   baseURL: API_URL,
@@ -18,28 +17,37 @@ interface RefreshTokenResponse {
   };
 }
 
-let refreshAccessTokenRequest: Promise<string> | null = null;
+interface RefreshAccessTokenRequest {
+  refreshToken: string;
+  promise: Promise<string>;
+}
+
+let refreshAccessTokenRequest: RefreshAccessTokenRequest | null = null;
 
 export const refreshAccessToken = (): Promise<string> => {
-  if (refreshAccessTokenRequest) return refreshAccessTokenRequest;
+  const requestRefreshToken = Cookies.get('refresh_token');
+  if (!requestRefreshToken) return Promise.reject(new Error('No refresh token available'));
+  if (refreshAccessTokenRequest?.refreshToken === requestRefreshToken) {
+    return refreshAccessTokenRequest.promise;
+  }
 
-  refreshAccessTokenRequest = (async () => {
-    const refreshToken = Cookies.get('refresh_token');
-    if (!refreshToken) throw new Error('No refresh token available');
-
+  const promise = (async () => {
     const response = await axios.post<RefreshTokenResponse>(`${API_URL}/auth/refresh-token`, {
-      refresh_token: refreshToken,
+      refresh_token: requestRefreshToken,
     });
     const { access_token, refresh_token } = response.data.data;
 
-    Cookies.set('access_token', access_token, { expires: 1 });
-    Cookies.set('refresh_token', refresh_token, { expires: 30 });
+    if (Cookies.get('refresh_token') === requestRefreshToken) {
+      Cookies.set('access_token', access_token, { expires: 1 });
+      Cookies.set('refresh_token', refresh_token, { expires: 30 });
+    }
     return access_token;
   })().finally(() => {
-    refreshAccessTokenRequest = null;
+    if (refreshAccessTokenRequest?.promise === promise) refreshAccessTokenRequest = null;
   });
 
-  return refreshAccessTokenRequest;
+  refreshAccessTokenRequest = { refreshToken: requestRefreshToken, promise };
+  return promise;
 };
 
 export const clearClientAuth = (): void => {
@@ -62,15 +70,19 @@ apiClient.interceptors.response.use(
     // Check if error is 401 and not already retried
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
+      const requestRefreshToken = Cookies.get('refresh_token');
       try {
         const access_token = await refreshAccessToken();
         originalRequest.headers.Authorization = `Bearer ${access_token}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
-        clearClientAuth();
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('auth-storage');
-          window.location.href = '/login';
+        const isCurrentSession = Cookies.get('refresh_token') === requestRefreshToken;
+        if (isCurrentSession) {
+          clearClientAuth();
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('auth-storage');
+            window.location.href = '/login';
+          }
         }
         return Promise.reject(refreshError);
       }

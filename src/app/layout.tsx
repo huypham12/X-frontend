@@ -18,6 +18,7 @@ export const metadata: Metadata = {
 };
 
 import AppProvider from '@/providers/app-provider';
+import { RealtimeSyncProvider } from '@/providers/realtime-sync-provider';
 import { SocketProvider } from '@/providers/socket-provider';
 
 export default function RootLayout({
@@ -34,7 +35,7 @@ export default function RootLayout({
       <body suppressHydrationWarning className="min-h-full flex flex-col font-sans">
         <AppProvider>
           <SocketProvider>
-            {children}
+            <RealtimeSyncProvider>{children}</RealtimeSyncProvider>
           </SocketProvider>
         </AppProvider>
       </body>

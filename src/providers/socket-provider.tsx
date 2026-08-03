@@ -3,9 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import Cookies from 'js-cookie';
-import { useQueryClient } from '@tanstack/react-query';
-import { useConversationSocketSync } from '@/features/conversations/hooks/use-conversation-socket-sync';
-import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { selectIsSessionReady, useAuthStore } from '@/features/auth/stores/auth.store';
 import { clearClientAuth, refreshAccessToken } from '@/services/api.client';
 
 interface SocketContextType {
@@ -23,15 +21,13 @@ export const useSocket = () => {
 };
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
-  const queryClient = useQueryClient();
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isSessionReady = useAuthStore(selectIsSessionReady);
   const logout = useAuthStore((state) => state.logout);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  useConversationSocketSync(socket);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isSessionReady) return;
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
     const baseUrl = apiUrl.replace(/\/api\/?$/, '');
@@ -90,11 +86,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       socketInstance.on('disconnect', handleDisconnected);
       socketInstance.on('connect_error', handleConnectError);
 
-      const handleBlockStatusChanged = () => {
-        void queryClient.invalidateQueries({ queryKey: ['user'] });
-      };
-
-      socketInstance.on('@user:block-status-changed', handleBlockStatusChanged);
       socketInstance.connect();
     };
 
@@ -107,7 +98,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setSocket(null);
       setIsConnected(false);
     };
-  }, [isAuthenticated, logout, queryClient]);
+  }, [isSessionReady, logout]);
 
   return (
     <SocketContext.Provider value={{ socket, isConnected }}>

@@ -3,21 +3,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSocket } from '@/providers/socket-provider';
 import { toast } from 'sonner';
 import { conversationPartnerProfileQueryKey } from './use-conversation-partner-profile';
-import type {
-  MessageDeletedForMeEvent,
-  MessageReactionUpdatedEvent,
-  MessageRevokedEvent,
-} from '../types/message-action.type';
-import {
-  clearDeletedMessageSelections,
-  MESSAGE_REACTION_DETAILS_QUERY_KEY,
-  refreshDeletedMessageQueries,
-  refreshRevokedMessageQueries,
-  syncReactionUpdatedCaches,
-  syncDeletedMessageCaches,
-  syncRevokedMessageCaches,
-} from './use-message-actions';
-import { useMessageComposerStore } from '../stores/message-composer.store';
 
 interface ConversationSocketError {
   code?: string;
@@ -60,36 +45,10 @@ export const useChatSocket = (conversationId?: string, partnerUsername?: string)
       }
     };
 
-    const handleMessageRevoked = (event: MessageRevokedEvent) => {
-      syncRevokedMessageCaches(queryClient, event);
-      useMessageComposerStore.getState().clearReplyToMessage(event.message_id);
-      void refreshRevokedMessageQueries(queryClient, event.conversation_id);
-    };
-
-    const handleMessageDeletedForMe = (event: MessageDeletedForMeEvent) => {
-      syncDeletedMessageCaches(queryClient, event);
-      clearDeletedMessageSelections(event);
-      void refreshDeletedMessageQueries(queryClient, event);
-    };
-
-    const handleMessageReactionUpdated = (event: MessageReactionUpdatedEvent) => {
-      syncReactionUpdatedCaches(queryClient, event);
-      void queryClient.invalidateQueries({
-        queryKey: MESSAGE_REACTION_DETAILS_QUERY_KEY(event.message_id),
-        refetchType: 'active',
-      });
-    };
-
     socket.on('@conversation:error', handleConversationError);
-    socket.on('@message:revoked', handleMessageRevoked);
-    socket.on('@message:deleted-for-me', handleMessageDeletedForMe);
-    socket.on('@message:reaction-updated', handleMessageReactionUpdated);
 
     return () => {
       socket.off('@conversation:error', handleConversationError);
-      socket.off('@message:revoked', handleMessageRevoked);
-      socket.off('@message:deleted-for-me', handleMessageDeletedForMe);
-      socket.off('@message:reaction-updated', handleMessageReactionUpdated);
     };
   }, [socket, isConnected, queryClient, conversationId, partnerUsername]);
 

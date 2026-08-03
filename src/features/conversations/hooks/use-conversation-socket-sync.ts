@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
@@ -10,6 +10,7 @@ import { CONVERSATIONS_QUERY_KEY } from './use-conversations';
 import { GROUP_MEMBERS_QUERY_KEY } from './use-group-members';
 import type { ConversationHistoryClearedEvent } from '../types/conversation-action.type';
 import {
+  applyConversationReadState,
   clearConversationHistoryCaches,
   removeConversationCaches,
 } from '../utils/conversation-cache';
@@ -21,14 +22,52 @@ import { useConversationDetailsStore } from '../stores/conversation-details.stor
 import { useMessageComposerStore } from '../stores/message-composer.store';
 import type { Conversation, Message, MessageType, PaginationResponse } from '../types';
 import { MESSAGES_QUERY_KEY } from './use-messages';
+import type { ConversationReadStateEvent } from '../types/conversation-unread.type';
+import {
+  clearDeletedMessageSelections,
+  MESSAGE_REACTION_DETAILS_QUERY_KEY,
+  refreshDeletedMessageQueries,
+  refreshRevokedMessageQueries,
+  syncDeletedMessageCaches,
+  syncReactionUpdatedCaches,
+  syncRevokedMessageCaches,
+} from './use-message-actions';
+import type {
+  MessageDeletedForMeEvent,
+  MessageReactionUpdatedEvent,
+  MessageRevokedEvent,
+} from '../types/message-action.type';
+import { conversationKeys } from '../constants/conversation-query-keys';
+
+const MAX_RECENT_MESSAGE_EVENTS = 500;
+
+const rememberMessageEvent = (events: Map<string, string>, key: string, fingerprint: string) => {
+  if (events.get(key) === fingerprint) return false;
+  events.set(key, fingerprint);
+  if (events.size > MAX_RECENT_MESSAGE_EVENTS) {
+    const oldestKey = events.keys().next().value;
+    if (oldestKey !== undefined) events.delete(oldestKey);
+  }
+  return true;
+};
 
 export const useConversationSocketSync = (socket: Socket | null) => {
   const queryClient = useQueryClient();
   const pathname = usePathname();
   const router = useRouter();
+  const pathnameRef = useRef(pathname);
+  const recentMessageEventsRef = useRef(new Map<string, string>());
+  const highestReadStateVersionRef = useRef(-1);
 
   useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
+
+  useEffect(() => {
+    recentMessageEventsRef.current.clear();
+    highestReadStateVersionRef.current = -1;
     if (!socket) return;
+    const recentMessageEvents = recentMessageEventsRef.current;
 
     const handleGroupUpdated = (event: GroupUpdatedEvent) => {
       if (!event?.conversation_id) return;
@@ -46,7 +85,9 @@ export const useConversationSocketSync = (socket: Socket | null) => {
         if (details.openConversationId === event.conversation_id) details.closeDetails();
         const composer = useMessageComposerStore.getState();
         if (composer.conversationId === event.conversation_id) composer.clearReply();
-        if (pathname === `/messages/${event.conversation_id}`) router.replace('/messages');
+        if (pathnameRef.current === `/messages/${event.conversation_id}`) {
+          router.replace('/messages');
+        }
         void removeConversationCaches(queryClient, event.conversation_id).then(() =>
           queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY }),
         );
@@ -61,6 +102,15 @@ export const useConversationSocketSync = (socket: Socket | null) => {
 
     const handleReceiveMessage = (newMessage: Message) => {
       if (!newMessage?.conversation_id) return;
+      if (
+        !rememberMessageEvent(
+          recentMessageEvents,
+          `receive:${newMessage._id}`,
+          `${newMessage.send_at}:${newMessage.status}`,
+        )
+      ) {
+        return;
+      }
 
       queryClient.setQueryData<InfiniteData<PaginationResponse<Message>, string | undefined>>(
         MESSAGES_QUERY_KEY(newMessage.conversation_id),
@@ -122,6 +172,69 @@ export const useConversationSocketSync = (socket: Socket | null) => {
       }
     };
 
+    const handleReadState = (event: ConversationReadStateEvent) => {
+      if (!event?.conversation_id || !Number.isSafeInteger(event.version) || event.version < 0) {
+        return;
+      }
+      if (event.version < highestReadStateVersionRef.current) return;
+      highestReadStateVersionRef.current = Math.max(
+        highestReadStateVersionRef.current,
+        event.version,
+      );
+      const didCompareVersion = applyConversationReadState(queryClient, event);
+      if (didCompareVersion) return;
+      void queryClient.invalidateQueries({
+        queryKey: conversationKeys.unreadSummary(),
+        refetchType: 'active',
+      });
+      void queryClient.invalidateQueries({
+        queryKey: CONVERSATIONS_QUERY_KEY,
+        refetchType: 'active',
+      });
+    };
+
+    const handleMessageRevoked = (event: MessageRevokedEvent) => {
+      if (!event?.conversation_id || !event.message_id) return;
+      if (!rememberMessageEvent(recentMessageEvents, `revoked:${event.message_id}`, 'revoked')) {
+        return;
+      }
+      syncRevokedMessageCaches(queryClient, event);
+      useMessageComposerStore.getState().clearReplyToMessage(event.message_id);
+      void refreshRevokedMessageQueries(queryClient, event.conversation_id);
+    };
+
+    const handleMessageDeletedForMe = (event: MessageDeletedForMeEvent) => {
+      if (!event?.conversation_id || !event.message_id) return;
+      if (!rememberMessageEvent(recentMessageEvents, `deleted:${event.message_id}`, 'deleted')) {
+        return;
+      }
+      syncDeletedMessageCaches(queryClient, event);
+      clearDeletedMessageSelections(event);
+      void refreshDeletedMessageQueries(queryClient, event);
+    };
+
+    const handleMessageReactionUpdated = (event: MessageReactionUpdatedEvent) => {
+      if (!event?.conversation_id || !event.message_id) return;
+      const fingerprint = event.reactions
+        .map((reaction) => `${reaction.user_id}:${reaction.emoji}`)
+        .sort()
+        .join('|');
+      if (
+        !rememberMessageEvent(
+          recentMessageEvents,
+          `reaction:${event.message_id}`,
+          fingerprint,
+        )
+      ) {
+        return;
+      }
+      syncReactionUpdatedCaches(queryClient, event);
+      void queryClient.invalidateQueries({
+        queryKey: MESSAGE_REACTION_DETAILS_QUERY_KEY(event.message_id),
+        refetchType: 'active',
+      });
+    };
+
     const handleHistoryCleared = (event: ConversationHistoryClearedEvent) => {
       if (!event?.conversation_id) return;
       if (wasConversationReopenedAfter(event.conversation_id, event.cleared_at)) return;
@@ -147,18 +260,28 @@ export const useConversationSocketSync = (socket: Socket | null) => {
       if (details.openConversationId === event.conversation_id) details.closeDetails();
       const composer = useMessageComposerStore.getState();
       if (composer.conversationId === event.conversation_id) composer.clearReply();
-      if (pathname === `/messages/${event.conversation_id}`) router.replace('/messages');
+      if (pathnameRef.current === `/messages/${event.conversation_id}`) {
+        router.replace('/messages');
+      }
       void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
     };
 
     socket.on('@conversation:group-updated', handleGroupUpdated);
     socket.on('@conversation:receive', handleReceiveMessage);
+    socket.on('@conversation:read-state', handleReadState);
     socket.on('@conversation:history-cleared', handleHistoryCleared);
+    socket.on('@message:revoked', handleMessageRevoked);
+    socket.on('@message:deleted-for-me', handleMessageDeletedForMe);
+    socket.on('@message:reaction-updated', handleMessageReactionUpdated);
 
     return () => {
       socket.off('@conversation:group-updated', handleGroupUpdated);
       socket.off('@conversation:receive', handleReceiveMessage);
+      socket.off('@conversation:read-state', handleReadState);
       socket.off('@conversation:history-cleared', handleHistoryCleared);
+      socket.off('@message:revoked', handleMessageRevoked);
+      socket.off('@message:deleted-for-me', handleMessageDeletedForMe);
+      socket.off('@message:reaction-updated', handleMessageReactionUpdated);
     };
-  }, [pathname, queryClient, router, socket]);
+  }, [queryClient, router, socket]);
 };

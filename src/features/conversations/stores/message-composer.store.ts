@@ -7,6 +7,7 @@ interface MessageComposerState {
   startReply: (conversationId: string, message: Message) => void;
   clearReply: () => void;
   clearReplyToMessage: (messageId: string) => void;
+  reset: () => void;
 }
 
 const getReplyMediaType = (message: Message): MessageReplyMediaType | undefined => {
@@ -40,4 +41,5 @@ export const useMessageComposerStore = create<MessageComposerState>((set) => ({
   clearReply: () => set(EMPTY_REPLY_STATE),
   clearReplyToMessage: (messageId) =>
     set((state) => (state.replyTo?._id === messageId ? EMPTY_REPLY_STATE : state)),
+  reset: () => set(EMPTY_REPLY_STATE),
 }));

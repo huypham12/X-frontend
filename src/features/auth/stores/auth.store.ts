@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import Cookies from 'js-cookie';
 
 export interface User {
@@ -7,43 +6,117 @@ export interface User {
   name: string;
   email: string;
   username: string;
-  avatar: string;
+  avatar?: string;
   cover_photo?: string;
   bio?: string;
-  verify: number;
+  verify?: number;
   tweet_count?: number;
   follower_count?: number;
   following_count?: number;
 }
 
-interface AuthState {
+export type AuthenticationAttemptId = number;
+
+export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
-  
+  isInitializing: boolean;
+  activeAuthenticationAttemptId: AuthenticationAttemptId | null;
+  startAuthentication: () => AuthenticationAttemptId;
+  setAuthenticationTokens: (
+    attemptId: AuthenticationAttemptId,
+    accessToken: string,
+    refreshToken?: string,
+  ) => boolean;
+  completeAuthentication: (attemptId: AuthenticationAttemptId, user: User) => boolean;
+  failAuthentication: (attemptId: AuthenticationAttemptId) => boolean;
   setAuth: (user: User, accessToken: string, refreshToken: string) => void;
   logout: () => void;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
+let nextAuthenticationAttemptId = 0;
+
+const storeTokens = (accessToken: string, refreshToken?: string) => {
+  Cookies.set('access_token', accessToken, { expires: 1 });
+  if (refreshToken) Cookies.set('refresh_token', refreshToken, { expires: 30 });
+};
+
+const clearLegacyPersistedAuth = () => {
+  if (typeof window !== 'undefined') localStorage.removeItem('auth-storage');
+};
+
+export const selectIsSessionReady = (state: AuthState) =>
+  state.isAuthenticated && !state.isInitializing && state.user !== null;
+
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  user: null,
+  isAuthenticated: false,
+  isInitializing: true,
+  activeAuthenticationAttemptId: null,
+
+  startAuthentication: () => {
+    nextAuthenticationAttemptId += 1;
+    const attemptId = nextAuthenticationAttemptId;
+    clearLegacyPersistedAuth();
+    set({
       user: null,
       isAuthenticated: false,
+      isInitializing: true,
+      activeAuthenticationAttemptId: attemptId,
+    });
+    return attemptId;
+  },
 
-      setAuth: (user, accessToken, refreshToken) => {
-        Cookies.set('access_token', accessToken, { expires: 1 }); // 1 day
-        Cookies.set('refresh_token', refreshToken, { expires: 30 }); // 30 days
-        set({ user, isAuthenticated: true });
-      },
+  setAuthenticationTokens: (attemptId, accessToken, refreshToken) => {
+    if (get().activeAuthenticationAttemptId !== attemptId) return false;
+    storeTokens(accessToken, refreshToken);
+    return true;
+  },
 
-      logout: () => {
-        Cookies.remove('access_token');
-        Cookies.remove('refresh_token');
-        set({ user: null, isAuthenticated: false });
-      },
-    }),
-    {
-      name: 'auth-storage',
-    }
-  )
-);
+  completeAuthentication: (attemptId, user) => {
+    if (get().activeAuthenticationAttemptId !== attemptId) return false;
+    set({
+      user,
+      isAuthenticated: true,
+      isInitializing: false,
+      activeAuthenticationAttemptId: null,
+    });
+    return true;
+  },
+
+  failAuthentication: (attemptId) => {
+    if (get().activeAuthenticationAttemptId !== attemptId) return false;
+    Cookies.remove('access_token');
+    Cookies.remove('refresh_token');
+    clearLegacyPersistedAuth();
+    set({
+      user: null,
+      isAuthenticated: false,
+      isInitializing: false,
+      activeAuthenticationAttemptId: null,
+    });
+    return true;
+  },
+
+  setAuth: (user, accessToken, refreshToken) => {
+    storeTokens(accessToken, refreshToken);
+    set({
+      user,
+      isAuthenticated: true,
+      isInitializing: false,
+      activeAuthenticationAttemptId: null,
+    });
+  },
+
+  logout: () => {
+    Cookies.remove('access_token');
+    Cookies.remove('refresh_token');
+    clearLegacyPersistedAuth();
+    set({
+      user: null,
+      isAuthenticated: false,
+      isInitializing: false,
+      activeAuthenticationAttemptId: null,
+    });
+  },
+}));

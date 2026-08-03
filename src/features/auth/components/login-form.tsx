@@ -6,8 +6,11 @@ import * as z from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import axios from 'axios';
 import { authService } from '@/features/auth/api/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { getAuthenticatedUser } from '@/features/auth/utils/auth-user';
+import { userService } from '@/features/users/api/user.service';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -19,7 +22,10 @@ const formSchema = z.object({
 
 export function LoginForm() {
   const router = useRouter();
-  const setAuth = useAuthStore((state) => state.setAuth);
+  const startAuthentication = useAuthStore((state) => state.startAuthentication);
+  const setAuthenticationTokens = useAuthStore((state) => state.setAuthenticationTokens);
+  const completeAuthentication = useAuthStore((state) => state.completeAuthentication);
+  const failAuthentication = useAuthStore((state) => state.failAuthentication);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -30,15 +36,38 @@ export function LoginForm() {
   });
 
   const mutation = useMutation({
-    mutationFn: authService.login,
-    onSuccess: (data) => {
+    mutationFn: async (values: z.infer<typeof formSchema>) => {
+      const attemptId = startAuthentication();
+
+      try {
+        const { access_token, refresh_token } = await authService.login(values);
+        const isCurrentAttempt = setAuthenticationTokens(
+          attemptId,
+          access_token,
+          refresh_token,
+        );
+        if (!isCurrentAttempt) return false;
+
+        const userData: unknown = await userService.getMe();
+        const currentUser = getAuthenticatedUser(userData);
+        if (!currentUser) throw new Error('Invalid current-user response');
+
+        return completeAuthentication(attemptId, currentUser);
+      } catch (error) {
+        failAuthentication(attemptId);
+        throw error;
+      }
+    },
+    onSuccess: (didAuthenticate) => {
+      if (!didAuthenticate) return;
       toast.success('Đăng nhập thành công');
-      const { access_token, refresh_token } = data;
-      setAuth(null as any, access_token, refresh_token);
       router.push('/home');
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Đăng nhập thất bại');
+    onError: (error: unknown) => {
+      const message = axios.isAxiosError<{ message?: string }>(error)
+        ? error.response?.data?.message
+        : undefined;
+      toast.error(message || 'Đăng nhập thất bại');
     },
   });
 

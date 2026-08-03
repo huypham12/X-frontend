@@ -2,6 +2,15 @@ import type { MediaMetadata } from '@/features/media/types/media.type';
 
 export type MessageType = 'text' | 'image' | 'video' | 'audio' | 'file';
 export type ConversationType = 'direct' | 'group';
+export type MessageKind = 'user' | 'system';
+export type ConversationSystemEventType =
+  | 'group_created'
+  | 'member_added'
+  | 'member_left'
+  | 'member_kicked'
+  | 'admin_granted'
+  | 'admin_revoked'
+  | 'admin_transferred_and_left';
 
 export interface UserPreview {
   _id: string;
@@ -47,13 +56,20 @@ export interface Message {
   conversation_type: ConversationType;
   sender_id: string;
   sender_info: UserPreview | null;
+  kind?: MessageKind;
+  system_event_type?: ConversationSystemEventType;
+  affected_user_ids?: string[];
+  context?: Record<string, unknown>;
   content: string;
   media_ids: string[];
   medias_info?: MediaMetadata[];
   send_at: string;
-  read_by: string[];
+  read_by?: string[];
   reply_to_message_id?: string;
   reply_to: MessageReplyPreview | null;
+  mention_user_ids?: string[];
+  client_message_id?: string;
+  origin_message_id?: string;
   status: 'sent' | 'revoked' | 'deleted';
   reactions: Reaction[];
   is_forwarded?: boolean;
@@ -70,6 +86,9 @@ export interface BaseConversation {
   hidden_by?: string[];
   pinned_by?: string[];
   muted_by?: { user_id: string; until: string | null }[];
+  unread_message_count: number;
+  last_read_message_id: string | null;
+  last_read_at: string | null;
   created_at: string;
   updated_at: string;
 }
