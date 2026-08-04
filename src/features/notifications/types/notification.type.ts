@@ -121,7 +121,6 @@ interface NotificationSocketItemBase {
   read_at: string | null;
   updated_at: string;
   invalidated_at: string | null;
-  schema_version?: 2;
 }
 
 interface NotificationListItemBase extends NotificationSocketItemBase {

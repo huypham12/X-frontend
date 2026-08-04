@@ -29,8 +29,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 }) => {
   const [content, setContent] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [isSending, setIsSending] = useState(false);
-  const { sendMessage, emitTyping } = useChatSocket(conversationId, partnerUsername);
+  const {
+    sendMessage,
+    retryPendingMessage,
+    abandonPendingMessage,
+    pendingOperation,
+    emitTyping,
+  } = useChatSocket(conversationId, partnerUsername);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const replyConversationId = useMessageComposerStore((state) => state.conversationId);
   const storedReplyTo = useMessageComposerStore((state) => state.replyTo);
@@ -74,22 +79,28 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       return;
     }
 
-    setIsSending(true);
-    const wasSent = await sendMessage({
+    const result = await sendMessage({
       conversation_id: conversationId,
       conversation_type: conversationType,
       content: content.trim(),
       media_ids: readyMediaIds,
       ...(replyTo ? { reply_to_message_id: replyTo._id } : {}),
     });
-    setIsSending(false);
+    if (result.status !== 'committed') return;
 
-    if (!wasSent) return;
-    
+    clearCommittedDraft();
+  };
+
+  const clearCommittedDraft = () => {
     setContent('');
     clearMedia();
     clearReply();
     emitTyping({ conversation_id: conversationId, conversation_type: conversationType, isTyping: false });
+  };
+
+  const handleRetrySend = async () => {
+    const result = await retryPendingMessage();
+    if (result?.status === 'committed') clearCommittedDraft();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -119,12 +130,18 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const isComposerDisabled =
     conversationType === 'direct' &&
     (isMessagingAvailabilityLoading || Boolean(disabledReason));
+  const isSending = pendingOperation?.status === 'sending';
+  const hasUnresolvedOperation = Boolean(pendingOperation);
+  const canEditAsNew =
+    pendingOperation?.status === 'not_sent' ||
+    pendingOperation?.status === 'failed' ||
+    pendingOperation?.status === 'conflict';
   const composerStatus = isMessagingAvailabilityLoading
     ? 'Checking whether direct messaging is available…'
     : disabledReason;
   const isSendDisabled =
     isComposerDisabled ||
-    isSending ||
+    hasUnresolvedOperation ||
     (!content.trim() && readyMediaIds.length === 0) ||
     isMediaBusy ||
     hasMediaError ||
@@ -144,8 +161,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           <button
             type="button"
             onClick={clearReply}
+            disabled={hasUnresolvedOperation}
             aria-label="Cancel reply"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors duration-200 hover:bg-[#181818] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors duration-200 hover:bg-[#181818] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -186,11 +204,49 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
+      {pendingOperation && (
+        <div
+          id={`message-send-status-${conversationId}`}
+          role={pendingOperation.status === 'conflict' ? 'alert' : 'status'}
+          className="mb-3 rounded-xl border border-[#2f3336] bg-[#121212] px-4 py-3 text-sm leading-5"
+        >
+          <p className={pendingOperation.status === 'conflict' ? 'text-red-300' : 'text-gray-300'}>
+            {isSending
+              ? 'Sending message…'
+              : pendingOperation.errorMessage || 'This message has not been confirmed.'}
+          </p>
+          {!isSending && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {pendingOperation.status !== 'conflict' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleRetrySend();
+                  }}
+                  className="min-h-11 rounded-full bg-white px-4 text-sm font-semibold text-black transition-colors duration-200 hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                >
+                  Retry same send
+                </button>
+              )}
+              {canEditAsNew && (
+                <button
+                  type="button"
+                  onClick={abandonPendingMessage}
+                  className="min-h-11 rounded-full border border-[#536471] px-4 text-sm font-semibold text-white transition-colors duration-200 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  Edit as new
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="relative flex items-center gap-2 rounded-full bg-[#202327] px-4 py-2">
         <MediaUploadButton
           onSelectFiles={handleSelectFiles}
           maxFiles={4}
-          disabled={isComposerDisabled || isSending || mediaItems.length >= 4}
+          disabled={isComposerDisabled || hasUnresolvedOperation || mediaItems.length >= 4}
           className="p-2 text-twitter-blue hover:bg-[#181818] rounded-full transition flex-shrink-0"
         >
           <ImageIcon className="w-5 h-5" />
@@ -199,7 +255,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         <div className="relative" ref={emojiPickerRef}>
           <button 
             type="button" 
-            disabled={isComposerDisabled || isSending}
+            disabled={isComposerDisabled || hasUnresolvedOperation}
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             aria-label="Choose an emoji"
             aria-expanded={showEmojiPicker}
@@ -208,7 +264,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             <Smile className="w-5 h-5" />
           </button>
           
-          {showEmojiPicker && !isComposerDisabled && !isSending && (
+          {showEmojiPicker && !isComposerDisabled && !hasUnresolvedOperation && (
             <div className="absolute bottom-full left-0 mb-2 z-50">
               <EmojiPicker 
                 onEmojiClick={onEmojiClick} 
@@ -225,7 +281,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           value={content}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          disabled={isComposerDisabled || isSending}
+          disabled={isComposerDisabled || hasUnresolvedOperation}
           placeholder={
             isSending
               ? 'Sending…'
@@ -234,7 +290,14 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 : 'Start a new message'
           }
           aria-label="Message"
-          aria-describedby={composerStatus ? `message-composer-status-${conversationId}` : undefined}
+          aria-describedby={
+            [
+              composerStatus ? `message-composer-status-${conversationId}` : null,
+              pendingOperation ? `message-send-status-${conversationId}` : null,
+            ]
+              .filter(Boolean)
+              .join(' ') || undefined
+          }
           className="flex-1 bg-transparent text-white border-none focus:outline-none focus:ring-0 text-[15px]"
         />
         

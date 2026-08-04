@@ -43,6 +43,11 @@ export const MessageRow = ({
     !isMine && message.conversation_type === 'group' && isFirstInCluster;
   const senderName = message.sender_info?.name.trim() || 'Unknown sender';
   const currentReaction = getCurrentUserReaction(message.reactions, currentUserId);
+  const isCurrentUserMentioned = Boolean(
+    currentUserId &&
+      message.conversation_type === 'group' &&
+      message.mention_user_ids?.includes(currentUserId),
+  );
 
   return (
     <div
@@ -52,6 +57,10 @@ export const MessageRow = ({
         isMine ? 'justify-end' : 'justify-start'
       } ${isLastInCluster ? 'mb-3' : ''} ${
         isHighlighted ? 'bg-[#1d9bf0]/10 ring-1 ring-[#1d9bf0]' : ''
+      } ${
+        isCurrentUserMentioned && !isHighlighted
+          ? 'bg-white/[0.04] ring-1 ring-white/30'
+          : ''
       }`}
     >
       {!isMine && (
@@ -70,6 +79,11 @@ export const MessageRow = ({
         }`}
       >
         <div className={`flex min-w-0 max-w-full flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+          {isCurrentUserMentioned && (
+            <span className="mb-1 rounded-full border border-white/30 px-2 py-0.5 text-[11px] font-semibold text-white">
+              Mentioned you
+            </span>
+          )}
           {showGroupSenderName && (
             <span className="mb-1 max-w-full truncate px-1 text-xs font-medium text-gray-400">
               {senderName}

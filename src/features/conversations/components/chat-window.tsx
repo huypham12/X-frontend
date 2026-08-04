@@ -191,7 +191,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
       <MessageList conversationId={conversationId} />
       
       {/* Input */}
-      <MessageInput 
+      <MessageInput
+        key={conversationId}
         conversationId={conversationId} 
         conversationType={conversation.type}
         partnerUsername={partnerUsername}

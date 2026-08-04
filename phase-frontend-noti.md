@@ -103,18 +103,18 @@ Các UX bị backend chặn vẫn có fallback an toàn và nằm riêng trong B
 
 ### Source of truth
 
-| State | Source of truth | Frontend owner |
-| --- | --- | --- |
-| Notification feed | `GET /api/notifications` | React Query infinite cache |
-| Notification unread | `GET /api/notifications/unread-count`, mutation responses và socket state có `version` | React Query query riêng; không tính từ feed |
-| Conversation list + unread từng row | `GET /api/conversations` | React Query `conversations` cache |
-| Inbox summary | `GET /api/conversations/unread-summary` và `@conversation:read-state` | React Query query riêng |
-| Message timeline/context | Message REST + committed socket events | React Query infinite/context caches |
-| Active conversation | URL `/messages/:conversationId` | Next.js route; không thêm active-conversation store |
-| Focus target message | UI intent | Giữ `conversation-details.store.ts` |
-| Reply/pending UI intent | UI draft | Zustand/local state, reset theo session/conversation |
-| Socket connection | Socket.IO client state | Giữ `SocketProvider` Context |
-| Group membership/role | Conversation/member APIs | React Query conversation + members projections |
+| State                               | Source of truth                                                                        | Frontend owner                                       |
+| ----------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Notification feed                   | `GET /api/notifications`                                                               | React Query infinite cache                           |
+| Notification unread                 | `GET /api/notifications/unread-count`, mutation responses và socket state có `version` | React Query query riêng; không tính từ feed          |
+| Conversation list + unread từng row | `GET /api/conversations`                                                               | React Query `conversations` cache                    |
+| Inbox summary                       | `GET /api/conversations/unread-summary` và `@conversation:read-state`                  | React Query query riêng                              |
+| Message timeline/context            | Message REST + committed socket events                                                 | React Query infinite/context caches                  |
+| Active conversation                 | URL `/messages/:conversationId`                                                        | Next.js route; không thêm active-conversation store  |
+| Focus target message                | UI intent                                                                              | Giữ `conversation-details.store.ts`                  |
+| Reply/pending UI intent             | UI draft                                                                               | Zustand/local state, reset theo session/conversation |
+| Socket connection                   | Socket.IO client state                                                                 | Giữ `SocketProvider` Context                         |
+| Group membership/role               | Conversation/member APIs                                                               | React Query conversation + members projections       |
 
 ### REST bootstrap
 
@@ -223,61 +223,61 @@ Quan hệ triển khai bắt buộc: contract/session foundation -> realtime sta
 
 ## 4. Contract matrix
 
-| Backend endpoint/event | Frontend state | Hook/store/query | Component ảnh hưởng | Hành động |
-| --- | --- | --- | --- | --- |
-| `GET /api/notifications?limit&cursor` | Notification pages | `notificationKeys.feed`, `useNotifications` | NotificationFeed | Infinite load, merge `_id`, giữ order/cursor opaque. |
-| `GET /api/notifications/unread-count` | Notification unread snapshot | `notificationKeys.unread` | Sidebar badges/feed header | Bootstrap/reconcile `{unreadCount,version,updated_at}`. |
-| `POST /api/notifications/:id/read` | Item read + unread snapshot | `useMarkNotificationRead` | NotificationItem | Optimistic có rollback hoặc commit theo response; badge dùng response version. |
-| `POST /api/notifications/read-all` | Cached read state + unread snapshot | `useMarkAllNotificationsRead` | NotificationPage | Apply safe cached rows; concurrent activity thì refetch page đầu/count. |
-| `@notification:new` | Raw notification event | `useNotificationSocketSync` + raw-event reducer | Feed/toast | Dedupe `_id`, không cast raw thành hydrated row, không cộng count; invalidate/refetch hydration/page đầu. |
-| `@notification:unread-count` | Notification unread | Cùng sync hook | Notifications badge | Chỉ apply version mới hơn. |
-| `@notification:read-state` | Read item(s) + unread | Cùng sync hook | Feed/badge | Mark-one exact; read-all invalidate nếu cutoff không xác định; replace count/version. |
-| `@notification:updated` | Raw aggregate event | Cùng sync hook | Aggregate row | Ghi nhận event theo `_id`, invalidate hydrated row/page; không đổi badge và không giữ actor projection cũ như truth. |
-| `@notification:removed` | Feed item + optional unread | Cùng sync hook | Feed/badge | Remove exact ID; apply non-stale version hoặc refetch count. |
-| `GET /api/conversations` | List + per-row unread/read position | `conversationKeys.list`, `useConversations` | Inbox/Chat/details | Bootstrap authoritative row state. |
-| `GET /api/conversations/unread-summary` | Inbox summary/version | `conversationKeys.unreadSummary` | Messages badge | Bootstrap/reconnect; badge dùng conversation count. |
-| `POST /api/conversations/:id/read` | Read position + row/summary | `useConversationRead` | Active chat/list/badge | Gửi exact visible `message_id`; apply full response atomically. |
-| Client `@conversation:read` ack | Như REST read | `useConversationRead` | Active chat | Primary fast path hoặc fallback policy duy nhất, không gửi trùng vô ích. |
-| `@conversation:read-state` | Authoritative row + summary | Conversation realtime sync | List/badge/active chat | Apply version không cũ; update row và summary trong một cache transaction. |
-| `GET /api/conversations/:id/messages` | Message timeline | `conversationKeys.messages` | MessageList | Cursor pagination, dedupe `_id`. |
-| `GET /api/conversations/:id/messages/:messageId/context` | Target message window | Existing focus store/context hook | Message deep-link | Load, focus/highlight target; 403/404 -> unavailable/cleanup. |
-| Client `@conversation:send` + ack | Pending/committed send | `useChatSocket` + pending UI state | MessageInput/MessageList | Stable `client_message_id`, retry same payload, consume `message_id`. |
-| `@conversation:receive` | Message + conversation preview | Conversation realtime sync | Chat/Inbox | Upsert `_id`, update preview/order; unread chờ read-state. |
-| `@message:reaction-updated` | Message reactions | Existing message cache helpers | MessageBubble | Replace authoritative reactions; no Inbox unread delta. |
-| `@message:revoked`, `@message:deleted-for-me` | Message/lifecycle caches | Existing helpers moved global | Chat/Inbox | Patch/remove projections, invalidate preview, clear target/reply. |
-| `@conversation:history-cleared` | Conversation-scoped caches | Existing conversation sync | Chat/Inbox | Remove scoped data, close route/details. |
-| `@conversation:group-updated` | Conversation/member/membership | Conversation realtime sync | Group UI/route | Invalidate/refetch; current user departure -> remove caches/route. |
-| System message qua `@conversation:receive` | Message timeline/unread | Message types/realtime sync | SystemMessageRow/Inbox | Render activity row, không user actions; unread theo read-state. |
-| `PATCH /api/user/:id/follow-notification-preferences` | Follow-post preference mutation | User service/mutation | Profile follow controls | Chỉ update sau state bootstrap có thẩm quyền; response `{followed_user_id,posts}`. |
-| `connect`/browser focus | Reconciliation trigger | RealtimeSyncProvider | Toàn bộ surfaces | Invalidate/refetch active personal queries, không polling. |
-| Logout/account switch | Personal state boundary | QueryClient + UI store resets | Toàn app | Cancel/clear cache và local sensitive state. |
+| Backend endpoint/event                                   | Frontend state                      | Hook/store/query                                | Component ảnh hưởng        | Hành động                                                                                                            |
+| -------------------------------------------------------- | ----------------------------------- | ----------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/notifications?limit&cursor`                    | Notification pages                  | `notificationKeys.feed`, `useNotifications`     | NotificationFeed           | Infinite load, merge `_id`, giữ order/cursor opaque.                                                                 |
+| `GET /api/notifications/unread-count`                    | Notification unread snapshot        | `notificationKeys.unread`                       | Sidebar badges/feed header | Bootstrap/reconcile `{unreadCount,version,updated_at}`.                                                              |
+| `POST /api/notifications/:id/read`                       | Item read + unread snapshot         | `useMarkNotificationRead`                       | NotificationItem           | Optimistic có rollback hoặc commit theo response; badge dùng response version.                                       |
+| `POST /api/notifications/read-all`                       | Cached read state + unread snapshot | `useMarkAllNotificationsRead`                   | NotificationPage           | Apply safe cached rows; concurrent activity thì refetch page đầu/count.                                              |
+| `@notification:new`                                      | Raw notification event              | `useNotificationSocketSync` + raw-event reducer | Feed/toast                 | Dedupe `_id`, không cast raw thành hydrated row, không cộng count; invalidate/refetch hydration/page đầu.            |
+| `@notification:unread-count`                             | Notification unread                 | Cùng sync hook                                  | Notifications badge        | Chỉ apply version mới hơn.                                                                                           |
+| `@notification:read-state`                               | Read item(s) + unread               | Cùng sync hook                                  | Feed/badge                 | Mark-one exact; read-all invalidate nếu cutoff không xác định; replace count/version.                                |
+| `@notification:updated`                                  | Raw aggregate event                 | Cùng sync hook                                  | Aggregate row              | Ghi nhận event theo `_id`, invalidate hydrated row/page; không đổi badge và không giữ actor projection cũ như truth. |
+| `@notification:removed`                                  | Feed item + optional unread         | Cùng sync hook                                  | Feed/badge                 | Remove exact ID; apply non-stale version hoặc refetch count.                                                         |
+| `GET /api/conversations`                                 | List + per-row unread/read position | `conversationKeys.list`, `useConversations`     | Inbox/Chat/details         | Bootstrap authoritative row state.                                                                                   |
+| `GET /api/conversations/unread-summary`                  | Inbox summary/version               | `conversationKeys.unreadSummary`                | Messages badge             | Bootstrap/reconnect; badge dùng conversation count.                                                                  |
+| `POST /api/conversations/:id/read`                       | Read position + row/summary         | `useConversationRead`                           | Active chat/list/badge     | Gửi exact visible `message_id`; apply full response atomically.                                                      |
+| Client `@conversation:read` ack                          | Như REST read                       | `useConversationRead`                           | Active chat                | Primary fast path hoặc fallback policy duy nhất, không gửi trùng vô ích.                                             |
+| `@conversation:read-state`                               | Authoritative row + summary         | Conversation realtime sync                      | List/badge/active chat     | Apply version không cũ; update row và summary trong một cache transaction.                                           |
+| `GET /api/conversations/:id/messages`                    | Message timeline                    | `conversationKeys.messages`                     | MessageList                | Cursor pagination, dedupe `_id`.                                                                                     |
+| `GET /api/conversations/:id/messages/:messageId/context` | Target message window               | Existing focus store/context hook               | Message deep-link          | Load, focus/highlight target; 403/404 -> unavailable/cleanup.                                                        |
+| Client `@conversation:send` + ack                        | Pending/committed send              | `useChatSocket` + pending UI state              | MessageInput/MessageList   | Stable `client_message_id`, retry same payload, consume `message_id`.                                                |
+| `@conversation:receive`                                  | Message + conversation preview      | Conversation realtime sync                      | Chat/Inbox                 | Upsert `_id`, update preview/order; unread chờ read-state.                                                           |
+| `@message:reaction-updated`                              | Message reactions                   | Existing message cache helpers                  | MessageBubble              | Replace authoritative reactions; no Inbox unread delta.                                                              |
+| `@message:revoked`, `@message:deleted-for-me`            | Message/lifecycle caches            | Existing helpers moved global                   | Chat/Inbox                 | Patch/remove projections, invalidate preview, clear target/reply.                                                    |
+| `@conversation:history-cleared`                          | Conversation-scoped caches          | Existing conversation sync                      | Chat/Inbox                 | Remove scoped data, close route/details.                                                                             |
+| `@conversation:group-updated`                            | Conversation/member/membership      | Conversation realtime sync                      | Group UI/route             | Invalidate/refetch; current user departure -> remove caches/route.                                                   |
+| System message qua `@conversation:receive`               | Message timeline/unread             | Message types/realtime sync                     | SystemMessageRow/Inbox     | Render activity row, không user actions; unread theo read-state.                                                     |
+| `PATCH /api/user/:id/follow-notification-preferences`    | Follow-post preference mutation     | User service/mutation                           | Profile follow controls    | Chỉ update sau state bootstrap có thẩm quyền; response `{followed_user_id,posts}`.                                   |
+| `connect`/browser focus                                  | Reconciliation trigger              | RealtimeSyncProvider                            | Toàn bộ surfaces           | Invalidate/refetch active personal queries, không polling.                                                           |
+| Logout/account switch                                    | Personal state boundary             | QueryClient + UI store resets                   | Toàn app                   | Cancel/clear cache và local sensitive state.                                                                         |
 
 ## 5. Gap matrix
 
-| Phân loại | Gap đã xác minh | Xử lý trong kế hoạch |
-| --- | --- | --- |
-| Frontend thiếu | Notification feature/route/feed/API/types/query/listeners | Phase 1, 2, 4 |
-| Frontend thiếu | Hai unread summaries/badges | Phase 1, 2, 3 |
-| Frontend thiếu | Inbox landing/mobile navigation/unread row | Phase 3, 5 |
-| Frontend thiếu | Active visibility read semantics | Phase 6 |
-| Frontend thiếu | Client idempotent send/mention highlight | Phase 7 |
-| Frontend thiếu | System message branch và group change types mới | Phase 8 |
-| Technical debt | Personal cache không clear logout/account switch | Phase 1 |
-| Technical debt | Provider phụ thuộc domain; lifecycle listeners chỉ mount trong chat | Phase 2 |
-| Technical debt | Query keys hard-code rải rác | Chỉ centralize các key bị chạm ở Phase 1/2; không refactor toàn dự án |
-| Technical debt | `/messages` render Home, mobile thiếu Inbox/nav | Phase 3/5 |
-| Technical debt | `any`, `read_by` legacy, response types cũ | Chỉ sửa type liên quan trong Phase 1/7; không dọn lint toàn repo |
-| Backend thiếu | Raw notification socket không hydrate và không có fetch-by-ID | Fallback refetch trong Phase 2/4; Phase 4.1 nếu rich realtime là gate |
-| Backend thiếu | `GET /conversations` không có last-message sender projection cho group | Fallback không prefix hoặc dùng data có sẵn; Phase 5.1 để hoàn thiện bền vững |
-| Backend thiếu | Không có API đọc current `posts` preference của follow relation | Không fake toggle; Phase 9.1 có điều kiện |
-| Backend thiếu | Notification target không có media thumbnail | Text preview; không chặn core feed |
-| Backend thiếu | Không có participant read receipts | Không hiển thị “Đã xem bởi”; ngoài core unread scope |
-| Backend thiếu | System message không bảo đảm actor/affected-user projections | Dùng backend `content`/copy trung tính; không dựng tên từ ID |
-| Backend thiếu | Không có public reason code cho target/actor null | Unavailable copy trung tính |
-| Contract không rõ | File `notification-backend-contract.md` không tồn tại | Dùng contract khả dụng; phải xác nhận trước khi triển khai Phase 1 |
-| Contract không rõ | Notification handoff không mô tả mute/message-context dù backend source có route/data | Giữ capability hiện có; không thay contract dựa trên suy đoán |
-| Không thuộc phạm vi | Push notification, migration/backfill, test-account automation | Không đưa vào phase frontend chính |
-| Không thuộc phạm vi | Refactor toàn auth/tweet/media/search hoặc làm sạch toàn bộ lint | Chỉ chạm boundary trực tiếp cần thiết |
+| Phân loại           | Gap đã xác minh                                                                       | Xử lý trong kế hoạch                                                          |
+| ------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Frontend thiếu      | Notification feature/route/feed/API/types/query/listeners                             | Phase 1, 2, 4                                                                 |
+| Frontend thiếu      | Hai unread summaries/badges                                                           | Phase 1, 2, 3                                                                 |
+| Frontend thiếu      | Inbox landing/mobile navigation/unread row                                            | Phase 3, 5                                                                    |
+| Frontend thiếu      | Active visibility read semantics                                                      | Phase 6                                                                       |
+| Frontend thiếu      | Client idempotent send/mention highlight                                              | Phase 7                                                                       |
+| Frontend thiếu      | System message branch và group change types mới                                       | Phase 8                                                                       |
+| Technical debt      | Personal cache không clear logout/account switch                                      | Phase 1                                                                       |
+| Technical debt      | Provider phụ thuộc domain; lifecycle listeners chỉ mount trong chat                   | Phase 2                                                                       |
+| Technical debt      | Query keys hard-code rải rác                                                          | Chỉ centralize các key bị chạm ở Phase 1/2; không refactor toàn dự án         |
+| Technical debt      | `/messages` render Home, mobile thiếu Inbox/nav                                       | Phase 3/5                                                                     |
+| Technical debt      | `any`, `read_by` legacy, response types cũ                                            | Chỉ sửa type liên quan trong Phase 1/7; không dọn lint toàn repo              |
+| Backend thiếu       | Raw notification socket không hydrate và không có fetch-by-ID                         | Fallback refetch trong Phase 2/4; Phase 4.1 nếu rich realtime là gate         |
+| Backend thiếu       | `GET /conversations` không có last-message sender projection cho group                | Fallback không prefix hoặc dùng data có sẵn; Phase 5.1 để hoàn thiện bền vững |
+| Backend thiếu       | Không có API đọc current `posts` preference của follow relation                       | Không fake toggle; Phase 9.1 có điều kiện                                     |
+| Backend thiếu       | Notification target không có media thumbnail                                          | Text preview; không chặn core feed                                            |
+| Backend thiếu       | Không có participant read receipts                                                    | Không hiển thị “Đã xem bởi”; ngoài core unread scope                          |
+| Backend thiếu       | System message không bảo đảm actor/affected-user projections                          | Dùng backend `content`/copy trung tính; không dựng tên từ ID                  |
+| Backend thiếu       | Không có public reason code cho target/actor null                                     | Unavailable copy trung tính                                                   |
+| Contract không rõ   | File `notification-backend-contract.md` không tồn tại                                 | Dùng contract khả dụng; phải xác nhận trước khi triển khai Phase 1            |
+| Contract không rõ   | Notification handoff không mô tả mute/message-context dù backend source có route/data | Giữ capability hiện có; không thay contract dựa trên suy đoán                 |
+| Không thuộc phạm vi | Push notification, migration/backfill, test-account automation                        | Không đưa vào phase frontend chính                                            |
+| Không thuộc phạm vi | Refactor toàn auth/tweet/media/search hoặc làm sạch toàn bộ lint                      | Chỉ chạm boundary trực tiếp cần thiết                                         |
 
 ## 6. Kế hoạch theo phase
 
@@ -576,7 +576,7 @@ Không đăng ký listener trong Sidebar. Refetch giữ count cache cũ; socket 
 - First load: stable placeholder/skeleton, không fake 0.
 - Cached refetch: giữ count + syncing state kín đáo.
 - 0: ẩn visual badge.
-- >=100: `99+`, aria đọc số thật.
+- > =100: `99+`, aria đọc số thật.
 - Disconnect kéo dài: shared reconnect indication, icons vẫn dùng được.
 
 **Edge cases**
@@ -928,7 +928,7 @@ Revert Messages landing/right-sidebar responsive composition và unread markup; 
 
 ### Phase 6 — Active conversation read semantics
 
-**Trạng thái: Hoàn thành một phần.**
+**Trạng thái: Đã hoàn thành.**
 
 > Blocker: backend `POST /conversations/:conversation_id/read` và `@conversation:read` hiện chưa invalidate/phát `@notification:removed` cho `message_reply`/`message_mention` trong committed read position (`../X-ver2/frontend-notification-contract.md`, mục Conversation unread); frontend chỉ đối soát feed/count, không tự ẩn item.
 
@@ -1034,7 +1034,7 @@ Disable/unmount read hook và new-message control; feed/list/cache vẫn dùng s
 
 ### Phase 7 — Reliable send và directed message UX
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Mục tiêu**
 
@@ -1372,19 +1372,19 @@ Các phase `.1` không nằm trong luồng frontend mặc định. Chúng chỉ 
 
 ## 8. Danh sách backend gaps
 
-| ID | Backend gap | Frontend vẫn làm được | Phần bị chặn | Phase phụ |
-| --- | --- | --- | --- | --- |
-| BG-01 | Thiếu đúng file `notification-backend-contract.md` | Dùng contract khả dụng và source backend để lập type | Không thể bảo đảm hai tài liệu là một nếu chưa xác nhận | Phase 1.1 nếu contract khác |
-| BG-02 | Notification socket raw, không fetch-by-ID | Upsert ID, placeholder, refetch page đầu/count | Rich realtime deterministic cho item ngoài page đầu | Phase 4.1 |
-| BG-03 | Notification target không có media thumbnail | Text preview | Thumbnail an toàn | Chưa mở; không chặn core |
-| BG-04 | Tweet thread không có endpoint anchor/fetch-around child trong parent page | Mở target child trực tiếp; focus nếu child đã load | Parent-thread focus chính xác với history dài | Mở backend/frontend subphase khi UX này là gate |
-| BG-05 | Group last preview chỉ có sender ID | Content fallback/realtime message info nếu có | Sender prefix bền vững sau reload | Phase 5.1 |
-| BG-06 | Follow-post preference không có read/bootstrap state | Render followed-user notification đã nhận | Toggle chính xác sau reload | Phase 9.1 |
-| BG-07 | System message thiếu public actor/affected projections | Backend content/copy trung tính | Copy có tên chính xác | Phase 8.1 nếu product bắt buộc |
-| BG-08 | Target/actor null không có public reason | Unavailable copy/disable CTA | Copy theo nguyên nhân | Không chặn core; tránh lộ block |
-| BG-09 | Participant read receipts không có | Current-user read/unread đầy đủ | “Đã xem bởi…” | Ngoài core scope |
-| BG-10 | Không có push contract | In-app REST/socket/reconnect | Browser/OS push offline | Ngoài scope |
-| BG-11 | Không có personal notification bảo đảm cho member-left/admin-transferred | System message/group update/cache cleanup | Activity row cá nhân riêng | Không tự tạo; chỉ mở nếu product đổi contract |
+| ID    | Backend gap                                                                | Frontend vẫn làm được                                | Phần bị chặn                                            | Phase phụ                                       |
+| ----- | -------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------- |
+| BG-01 | Thiếu đúng file `notification-backend-contract.md`                         | Dùng contract khả dụng và source backend để lập type | Không thể bảo đảm hai tài liệu là một nếu chưa xác nhận | Phase 1.1 nếu contract khác                     |
+| BG-02 | Notification socket raw, không fetch-by-ID                                 | Upsert ID, placeholder, refetch page đầu/count       | Rich realtime deterministic cho item ngoài page đầu     | Phase 4.1                                       |
+| BG-03 | Notification target không có media thumbnail                               | Text preview                                         | Thumbnail an toàn                                       | Chưa mở; không chặn core                        |
+| BG-04 | Tweet thread không có endpoint anchor/fetch-around child trong parent page | Mở target child trực tiếp; focus nếu child đã load   | Parent-thread focus chính xác với history dài           | Mở backend/frontend subphase khi UX này là gate |
+| BG-05 | Group last preview chỉ có sender ID                                        | Content fallback/realtime message info nếu có        | Sender prefix bền vững sau reload                       | Phase 5.1                                       |
+| BG-06 | Follow-post preference không có read/bootstrap state                       | Render followed-user notification đã nhận            | Toggle chính xác sau reload                             | Phase 9.1                                       |
+| BG-07 | System message thiếu public actor/affected projections                     | Backend content/copy trung tính                      | Copy có tên chính xác                                   | Phase 8.1 nếu product bắt buộc                  |
+| BG-08 | Target/actor null không có public reason                                   | Unavailable copy/disable CTA                         | Copy theo nguyên nhân                                   | Không chặn core; tránh lộ block                 |
+| BG-09 | Participant read receipts không có                                         | Current-user read/unread đầy đủ                      | “Đã xem bởi…”                                           | Ngoài core scope                                |
+| BG-10 | Không có push contract                                                     | In-app REST/socket/reconnect                         | Browser/OS push offline                                 | Ngoài scope                                     |
+| BG-11 | Không có personal notification bảo đảm cho member-left/admin-transferred   | System message/group update/cache cleanup            | Activity row cá nhân riêng                              | Không tự tạo; chỉ mở nếu product đổi contract   |
 
 Nếu khi triển khai một phase xuất hiện backend mismatch mới:
 

@@ -1,8 +1,21 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSocket } from '@/providers/socket-provider';
 import { toast } from 'sonner';
 import { conversationPartnerProfileQueryKey } from './use-conversation-partner-profile';
+import type {
+  PendingMessageOperation,
+  PendingSendStatus,
+  SendMessageDraft,
+  SendMessagePayload,
+  SendMessageResult,
+} from '../types/pending-message.type';
+import { MESSAGES_QUERY_KEY } from './use-messages';
+import {
+  hasCommittedMessage,
+  reconcileSendAcknowledgement,
+  type MessageInfiniteData,
+} from '../utils/message-idempotency';
 
 interface ConversationSocketError {
   code?: string;
@@ -16,19 +29,27 @@ interface ConversationSendAcknowledgement {
   error?: ConversationSocketError;
 }
 
-interface SendMessagePayload {
-  conversation_id: string;
-  conversation_type: 'direct' | 'group';
-  content: string;
-  media_ids?: string[];
-  reply_to_message_id?: string;
-}
-
 const DIRECT_MESSAGE_BLOCKED_CODE = 'DIRECT_MESSAGE_BLOCKED';
+const CLIENT_MESSAGE_ID_CONFLICT_CODE = 'CLIENT_MESSAGE_ID_CONFLICT';
+const SEND_TIMEOUT_MESSAGE =
+  'Could not confirm that the message was sent. Retry to safely check the same send operation.';
+
+const createClientMessageId = () => `web:${crypto.randomUUID()}`;
+
+const isConflictError = (error?: ConversationSocketError) =>
+  error?.code === CLIENT_MESSAGE_ID_CONFLICT_CODE;
 
 export const useChatSocket = (conversationId?: string, partnerUsername?: string) => {
   const { socket, isConnected } = useSocket();
   const queryClient = useQueryClient();
+  const operationRef = useRef<PendingMessageOperation | null>(null);
+  const inFlightPromiseRef = useRef<Promise<SendMessageResult> | null>(null);
+  const [pendingOperation, setPendingOperation] = useState<PendingMessageOperation | null>(null);
+
+  const updateOperation = useCallback((operation: PendingMessageOperation | null) => {
+    operationRef.current = operation;
+    setPendingOperation(operation);
+  }, []);
 
   useEffect(() => {
     if (!socket || !isConnected) return;
@@ -52,36 +73,147 @@ export const useChatSocket = (conversationId?: string, partnerUsername?: string)
     };
   }, [socket, isConnected, queryClient, conversationId, partnerUsername]);
 
-  const sendMessage = (payload: SendMessagePayload): Promise<boolean> => {
-    if (!socket || !isConnected) {
-      toast.error('Messaging is not connected. Your draft was kept.');
-      return Promise.resolve(false);
-    }
+  const emitOperation = useCallback(
+    (operation: PendingMessageOperation): Promise<SendMessageResult> => {
+      const sendingOperation = { ...operation, status: 'sending' as const, errorMessage: undefined };
+      updateOperation(sendingOperation);
 
-    return new Promise((resolve) => {
-      socket.timeout(10000).emit(
-        '@conversation:send',
-        payload,
-        (timeoutError: Error | null, result?: ConversationSendAcknowledgement) => {
-          if (timeoutError) {
-            toast.error('Could not confirm that the message was sent. Your draft was kept.');
-            resolve(false);
-            return;
-          }
+      if (!socket || !isConnected) {
+        const failedOperation = {
+          ...operation,
+          status: 'not_sent' as const,
+          errorMessage: 'Messaging is not connected. This message was not sent and your draft was kept.',
+        };
+        updateOperation(failedOperation);
+        return Promise.resolve({
+          status: failedOperation.status,
+          clientMessageId: operation.clientMessageId,
+          errorMessage: failedOperation.errorMessage,
+        });
+      }
 
-          if (!result?.success) {
-            if (result?.error?.code !== DIRECT_MESSAGE_BLOCKED_CODE) {
-              toast.error(result?.error?.message || 'Could not send this message. Your draft was kept.');
+      return new Promise((resolve) => {
+        socket.timeout(10000).emit(
+          '@conversation:send',
+          operation.payload,
+          (timeoutError: Error | null, result?: ConversationSendAcknowledgement) => {
+            if (timeoutError) {
+              const failedOperation = {
+                ...operation,
+                status: 'failed_to_confirm' as const,
+                errorMessage: SEND_TIMEOUT_MESSAGE,
+              };
+              updateOperation(failedOperation);
+              resolve({
+                status: failedOperation.status,
+                clientMessageId: operation.clientMessageId,
+                errorMessage: failedOperation.errorMessage,
+              });
+              return;
             }
-            resolve(false);
-            return;
-          }
 
-          resolve(true);
-        },
-      );
-    });
-  };
+            if (!result?.success || !result.message_id) {
+              const conflict = isConflictError(result?.error);
+              const status: PendingSendStatus = conflict ? 'conflict' : 'failed';
+              const errorMessage = conflict
+                ? 'This send operation conflicts with a different committed payload. Edit it to start a new operation.'
+                : result?.error?.message || 'Could not send this message. Your draft was kept.';
+              const failedOperation = { ...operation, status, errorMessage };
+              updateOperation(failedOperation);
+              if (result?.error?.code === DIRECT_MESSAGE_BLOCKED_CODE) {
+                toast.error(errorMessage);
+              }
+              resolve({
+                status: failedOperation.status,
+                clientMessageId: operation.clientMessageId,
+                errorMessage,
+              });
+              return;
+            }
+
+            const messagesKey = MESSAGES_QUERY_KEY(operation.payload.conversation_id);
+            const cachedMessages = queryClient.getQueryData<MessageInfiniteData>(messagesKey);
+            const alreadyCommitted = hasCommittedMessage(
+              cachedMessages,
+              result.message_id,
+              operation.clientMessageId,
+            );
+            queryClient.setQueryData<MessageInfiniteData>(messagesKey, (currentData) =>
+              reconcileSendAcknowledgement(
+                currentData,
+                result.message_id as string,
+                operation.clientMessageId,
+              ),
+            );
+            if (!alreadyCommitted) {
+              void queryClient.invalidateQueries({
+                queryKey: messagesKey,
+                exact: true,
+                refetchType: 'active',
+              });
+            }
+
+            updateOperation(null);
+            resolve({
+              status: 'committed',
+              clientMessageId: operation.clientMessageId,
+              messageId: result.message_id,
+            });
+          },
+        );
+      });
+    },
+    [isConnected, queryClient, socket, updateOperation],
+  );
+
+  const runOperation = useCallback(
+    (operation: PendingMessageOperation) => {
+      if (inFlightPromiseRef.current) return inFlightPromiseRef.current;
+
+      const request = emitOperation(operation);
+      inFlightPromiseRef.current = request;
+      void request.finally(() => {
+        if (inFlightPromiseRef.current === request) inFlightPromiseRef.current = null;
+      });
+      return request;
+    },
+    [emitOperation],
+  );
+
+  const sendMessage = useCallback(
+    (draft: SendMessageDraft): Promise<SendMessageResult> => {
+      const currentOperation = operationRef.current;
+      if (currentOperation) return runOperation(currentOperation);
+
+      const clientMessageId = createClientMessageId();
+      const payload: SendMessagePayload = {
+        ...draft,
+        media_ids: draft.media_ids ? [...draft.media_ids] : undefined,
+        mention_user_ids: draft.mention_user_ids ? [...draft.mention_user_ids] : undefined,
+        client_message_id: clientMessageId,
+      };
+      const operation: PendingMessageOperation = {
+        clientMessageId,
+        payload,
+        status: 'sending',
+      };
+      operationRef.current = operation;
+      return runOperation(operation);
+    },
+    [runOperation],
+  );
+
+  const retryPendingMessage = useCallback(() => {
+    const operation = operationRef.current;
+    if (!operation) return Promise.resolve<SendMessageResult | null>(null);
+    return runOperation(operation);
+  }, [runOperation]);
+
+  const abandonPendingMessage = useCallback(() => {
+    const status = operationRef.current?.status;
+    if (!status || status === 'sending' || status === 'failed_to_confirm') return;
+    updateOperation(null);
+  }, [updateOperation]);
 
   const emitTyping = (payload: { conversation_id: string, conversation_type: 'direct' | 'group', isTyping: boolean }) => {
     if (socket && isConnected) {
@@ -90,5 +222,11 @@ export const useChatSocket = (conversationId?: string, partnerUsername?: string)
     }
   };
 
-  return { sendMessage, emitTyping };
+  return {
+    sendMessage,
+    retryPendingMessage,
+    abandonPendingMessage,
+    pendingOperation,
+    emitTyping,
+  };
 };

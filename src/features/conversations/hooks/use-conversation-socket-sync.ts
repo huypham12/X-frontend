@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import type { GroupUpdatedEvent } from '../types/group-action.type';
@@ -21,7 +21,7 @@ import {
 } from '../utils/conversation-reopen-state';
 import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import { useMessageComposerStore } from '../stores/message-composer.store';
-import type { Conversation, Message, MessageType, PaginationResponse } from '../types';
+import type { Conversation, Message, MessageType } from '../types';
 import { MESSAGES_QUERY_KEY } from './use-messages';
 import type { ConversationReadStateEvent } from '../types/conversation-unread.type';
 import {
@@ -39,6 +39,10 @@ import type {
   MessageRevokedEvent,
 } from '../types/message-action.type';
 import { conversationKeys } from '../constants/conversation-query-keys';
+import {
+  upsertReceivedMessage,
+  type MessageInfiniteData,
+} from '../utils/message-idempotency';
 
 const MAX_RECENT_MESSAGE_EVENTS = 500;
 
@@ -114,24 +118,9 @@ export const useConversationSocketSync = (socket: Socket | null) => {
         return;
       }
 
-      queryClient.setQueryData<InfiniteData<PaginationResponse<Message>, string | undefined>>(
+      queryClient.setQueryData<MessageInfiniteData>(
         MESSAGES_QUERY_KEY(newMessage.conversation_id),
-        (currentData) => {
-          if (!currentData) return currentData;
-          const alreadyExists = currentData.pages.some((page) =>
-            page.messages.some((message) => message._id === newMessage._id),
-          );
-          if (alreadyExists) return currentData;
-
-          return {
-            ...currentData,
-            pages: currentData.pages.map((page, index) =>
-              index === 0
-                ? { ...page, messages: [newMessage, ...page.messages] }
-                : page,
-            ),
-          };
-        },
+        (currentData) => upsertReceivedMessage(currentData, newMessage),
       );
 
       const cachedConversations = queryClient.getQueryData<Conversation[]>(
