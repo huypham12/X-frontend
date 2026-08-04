@@ -4,18 +4,18 @@ import React from 'react';
 import { useConversations } from '../hooks/use-conversations';
 import { ConversationItem } from './conversation-item';
 import { Search, MessageSquarePlus } from 'lucide-react';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { FollowingListForChat } from './following-list';
 import { useFriendPresence } from '@/features/users/hooks/use-friend-presence';
 import { ConversationSearchResults } from './conversation-search-results';
 
 export const ConversationSidebar = () => {
-  const { data: conversations, isLoading, isError } = useConversations();
+  const { data: conversations, isLoading, isError, isFetching, refetch } = useConversations();
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isSearchFocused, setIsSearchFocused] = React.useState(false);
-  const router = useRouter();
-  const params = useParams();
-  const activeConversationId = params.conversationId as string;
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const params = useParams<{ conversationId?: string }>();
+  const activeConversationId = params.conversationId;
   const { isOnlineFriend } = useFriendPresence();
   const closeSearch = () => {
     setSearchQuery('');
@@ -29,18 +29,28 @@ export const ConversationSidebar = () => {
 
     setIsSearchFocused(false);
   };
+  const focusConversationSearch = () => {
+    setIsSearchFocused(true);
+    searchInputRef.current?.focus();
+  };
 
   return (
     <div
       onBlurCapture={handleSidebarBlur}
-      className="w-full sm:w-[350px] h-full flex flex-col bg-black"
+      className="flex h-full min-h-0 w-full flex-col bg-black"
     >
       {/* Header */}
       <div className="p-4 flex items-center justify-between border-b border-[#2f3336]">
         <h2 className="text-xl font-bold text-white">Messages</h2>
         <div className="flex gap-2">
-          <button className="p-2 hover:bg-[#181818] rounded-full transition" title="New message">
-            <MessageSquarePlus className="w-5 h-5 text-white" />
+          <button
+            type="button"
+            onClick={focusConversationSearch}
+            aria-label="Start a new message"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-full transition hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none"
+            title="New message"
+          >
+            <MessageSquarePlus aria-hidden="true" className="w-5 h-5 text-white" />
           </button>
         </div>
       </div>
@@ -48,8 +58,12 @@ export const ConversationSidebar = () => {
       {/* Search */}
       <div className="p-4">
         <div className="relative group">
-          <Search className="w-4 h-4 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-white" />
+          <Search
+            aria-hidden="true"
+            className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 group-focus-within:text-white"
+          />
           <input 
+            ref={searchInputRef}
             type="text" 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -63,25 +77,53 @@ export const ConversationSidebar = () => {
 
       {/* List */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+        {isError && conversations ? (
+          <div
+            role="status"
+            className="flex min-h-11 items-center justify-between gap-3 border-b border-[#2f3336] px-4 py-2 text-xs text-[#a1a1aa]"
+          >
+            <span>Could not refresh the inbox.</span>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+              className="min-h-11 shrink-0 rounded-full px-3 font-semibold text-white hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isFetching ? 'Retrying…' : 'Retry'}
+            </button>
+          </div>
+        ) : null}
         {isSearchFocused || searchQuery.trim().length > 0 ? (
           <ConversationSearchResults
             keyword={searchQuery}
             onConversationOpened={closeSearch}
           />
         ) : isLoading ? (
-          <div className="flex flex-col gap-4 p-4">
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="flex gap-3 items-center animate-pulse">
-                <div className="w-12 h-12 bg-gray-800 rounded-full flex-shrink-0" />
-                <div className="flex-1">
-                  <div className="h-4 bg-gray-800 rounded w-1/2 mb-2" />
-                  <div className="h-3 bg-gray-800 rounded w-3/4" />
+          <div role="status" aria-label="Loading conversations">
+            <div aria-hidden="true" className="flex flex-col gap-4 p-4">
+              {[1, 2, 3, 4, 5].map((item) => (
+                <div key={item} className="flex animate-pulse items-center gap-3">
+                  <div className="h-12 w-12 flex-shrink-0 rounded-full bg-gray-800" />
+                  <div className="flex-1">
+                    <div className="mb-2 h-4 w-1/2 rounded bg-gray-800" />
+                    <div className="h-3 w-3/4 rounded bg-gray-800" />
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        ) : isError ? (
-          <div className="p-4 text-center text-red-500 text-sm">Failed to load conversations.</div>
+        ) : isError && !conversations ? (
+          <div role="alert" className="flex flex-col items-center gap-3 p-6 text-center">
+            <p className="text-sm text-[#f87171]">Failed to load conversations.</p>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+              className="min-h-11 rounded-full border border-[#2f3336] px-5 text-sm font-semibold text-white transition hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none"
+            >
+              {isFetching ? 'Retrying…' : 'Try again'}
+            </button>
+          </div>
         ) : conversations?.length === 0 ? (
           <div className="flex flex-col">
             <div className="p-8 text-center flex flex-col items-center mt-2 border-b border-[#2f3336]">
@@ -97,7 +139,6 @@ export const ConversationSidebar = () => {
               conversation={conv} 
               isActive={activeConversationId === conv._id}
               isOnline={conv.type === 'direct' && isOnlineFriend(conv.partner_id)}
-              onClick={(id) => router.push(`/messages/${id}`)}
             />
           ))
         )}

@@ -41,7 +41,14 @@ export const applyConversationReadState = (
   const currentSummary = queryClient.getQueryData<ConversationUnreadSummary>(
     conversationKeys.unreadSummary(),
   );
-  if (currentSummary && event.version < currentSummary.version) return true;
+  if (currentSummary && event.version < currentSummary.version) {
+    void queryClient.invalidateQueries({
+      queryKey: CONVERSATIONS_QUERY_KEY,
+      exact: true,
+      refetchType: 'active',
+    });
+    return true;
+  }
 
   const wasSummaryFetching =
     queryClient.isFetching({

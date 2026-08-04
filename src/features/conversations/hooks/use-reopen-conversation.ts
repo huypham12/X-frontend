@@ -5,6 +5,7 @@ import { conversationsApi } from '../api/conversations.api';
 import { CONVERSATIONS_QUERY_KEY } from './use-conversations';
 import { upsertConversationCache } from '../utils/conversation-cache';
 import { markConversationReopened } from '../utils/conversation-reopen-state';
+import { conversationKeys } from '../constants/conversation-query-keys';
 
 interface ApiErrorBody {
   message?: string;
@@ -28,6 +29,7 @@ export const useReopenConversation = () => {
       markConversationReopened(result.conversation._id, result.reopened_at);
       upsertConversationCache(queryClient, result.conversation);
       void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+      void queryClient.invalidateQueries({ queryKey: conversationKeys.unreadSummary() });
     },
     onError: (error) => {
       toast.error(getErrorMessage(error));

@@ -15,6 +15,7 @@ import {
   clearConversationHistoryCaches,
   sortConversations,
 } from '../utils/conversation-cache';
+import { conversationKeys } from '../constants/conversation-query-keys';
 
 interface ApiErrorBody {
   message?: string;
@@ -165,7 +166,10 @@ export const useConversationActions = (conversation: Conversation) => {
       );
       closeDetails();
       router.replace('/messages');
-      await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: conversationKeys.unreadSummary() }),
+      ]);
     },
     onError: (error) => {
       toast.error(getErrorMessage(error, 'Could not hide conversation from your inbox.'));
@@ -180,7 +184,10 @@ export const useConversationActions = (conversation: Conversation) => {
       if (composer.conversationId === conversation._id) composer.clearReply();
       closeDetails();
       router.replace('/messages');
-      await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: conversationKeys.unreadSummary() }),
+      ]);
     },
     onError: (error) => {
       toast.error(getErrorMessage(error, 'Could not delete this chat history.'));

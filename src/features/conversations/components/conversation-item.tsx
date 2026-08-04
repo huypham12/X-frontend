@@ -7,19 +7,18 @@ import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { FriendPresenceDot } from '@/features/users/components/friend-presence-dot';
 import { BellOff, Pin } from 'lucide-react';
 import { getActiveConversationMute } from '../hooks/use-conversation-actions';
+import Link from 'next/link';
 
 interface ConversationItemProps {
   conversation: Conversation;
   isActive: boolean;
   isOnline?: boolean;
-  onClick: (conversationId: string) => void;
 }
 
 export const ConversationItem: React.FC<ConversationItemProps> = ({
   conversation,
   isActive,
   isOnline = false,
-  onClick,
 }) => {
   const currentUserId = useAuthStore((state) => state.user?._id);
   
@@ -40,6 +39,10 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
     : '';
 
   const isSentByMe = conversation.last_message_preview?.sender_id === currentUserId;
+  const unreadCount = Number.isSafeInteger(conversation.unread_message_count)
+    ? Math.max(0, conversation.unread_message_count)
+    : 0;
+  const isUnread = unreadCount > 0;
   const activeMute = getActiveConversationMute(conversation, currentUserId);
   const isMuted = Boolean(activeMute);
   const [, refreshMuteExpiry] = React.useReducer((version: number) => version + 1, 0);
@@ -60,42 +63,65 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
     file: 'Sent a file',
   };
   const lastMessageType = conversation.last_message_preview?.message_type;
-  const lastMessageText =
+  const preview = conversation.last_message_preview;
+  const lastMessageContent =
     (lastMessageType && messageTypeLabels[lastMessageType]) ||
-    conversation.last_message_preview?.content ||
-    'Started a conversation';
+    preview?.content ||
+    (preview?.kind === 'system' ? 'Group activity' : 'Started a conversation');
+  const senderPrefix =
+    preview?.kind === 'system'
+      ? ''
+      : conversation.type === 'direct'
+        ? isSentByMe
+          ? 'You: '
+          : ''
+        : preview?.kind === 'user' && isSentByMe
+          ? 'You: '
+          : preview?.kind === 'user' && preview.sender_info?.name
+            ? `${preview.sender_info.name}: `
+            : '';
+  const lastMessageText = `${senderPrefix}${lastMessageContent}`;
+  const unreadLabel = isUnread
+    ? `${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`
+    : 'No unread messages';
 
   return (
-    <div
-      onClick={() => onClick(conversation._id)}
-      className={`flex items-center gap-3 p-4 cursor-pointer transition duration-200 ease-in-out border-b border-[#2f3336]
+    <Link
+      href={`/messages/${conversation._id}`}
+      aria-current={isActive ? 'page' : undefined}
+      aria-label={`${title}, ${unreadLabel}. ${lastMessageText}`}
+      className={`flex min-h-20 items-center gap-3 border-b border-[#2f3336] p-4 transition duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white motion-reduce:transition-none
         ${isActive ? 'bg-[#181818]' : 'hover:bg-[#121212]'}`}
     >
       <div className="relative shrink-0">
         <div className="h-12 w-12 overflow-hidden rounded-full bg-gray-600">
           {/* Replace with next/image later if avatar is available */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={avatar} alt={title} className="h-full w-full object-cover" />
+          <img src={avatar} alt="" className="h-full w-full object-cover" />
         </div>
         <FriendPresenceDot isOnline={conversation.type === 'direct' && isOnline} />
       </div>
       
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-baseline mb-1">
-          <h3 className="font-semibold text-white truncate text-[15px]">{title}</h3>
+          <h3 className={`${isUnread ? 'font-bold' : 'font-semibold'} truncate text-[15px] text-white`}>
+            {title}
+          </h3>
           {timeAgo && (
-            <span className="text-gray-500 text-[13px] ml-2 flex-shrink-0">
+            <span
+              className={`${isUnread ? 'text-[#1d9bf0]' : 'text-gray-500'} ml-2 flex-shrink-0 text-[13px]`}
+            >
               {timeAgo}
             </span>
           )}
         </div>
         
-        <p className="text-gray-500 text-[14px] truncate">
-          {isSentByMe ? `You: ${lastMessageText}` : lastMessageText}
+        <p className={`${isUnread ? 'font-medium text-white' : 'text-gray-500'} truncate text-[14px]`}>
+          {lastMessageText}
         </p>
       </div>
       
-      {(isMuted || conversation.is_pinned) && (
+      {(isMuted || conversation.is_pinned || isUnread) && (
         <div className="flex shrink-0 items-center gap-1.5">
           {isMuted && (
             <BellOff
@@ -111,8 +137,16 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
               className="h-3.5 w-3.5 shrink-0 text-gray-500"
             />
           )}
+          {isUnread && (
+            <span
+              aria-hidden="true"
+              className="flex min-w-5 items-center justify-center rounded-full bg-[#1d9bf0] px-1.5 py-0.5 text-[11px] font-bold leading-4 text-white"
+            >
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
         </div>
       )}
-    </div>
+    </Link>
   );
 };

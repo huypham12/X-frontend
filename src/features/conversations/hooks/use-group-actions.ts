@@ -17,6 +17,7 @@ import type { UpdateGroupPayload } from '../types/group-action.type';
 import { removeConversationCaches } from '../utils/conversation-cache';
 import { CONVERSATIONS_QUERY_KEY } from './use-conversations';
 import { GROUP_MEMBERS_QUERY_KEY } from './use-group-members';
+import { conversationKeys } from '../constants/conversation-query-keys';
 
 interface ApiErrorBody {
   code?: string;
@@ -140,7 +141,10 @@ export const useGroupActions = (conversation: GroupConversation) => {
     await removeConversationCaches(queryClient, conversation._id);
     closeDetails();
     router.replace('/messages');
-    await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY }),
+      queryClient.invalidateQueries({ queryKey: conversationKeys.unreadSummary() }),
+    ]);
     toast.success(message);
   };
   const updateMutation = useMutation({

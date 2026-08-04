@@ -808,15 +808,15 @@ Khôi phục policy generation/query contract trước phase rồi reset lại n
 
 ### Phase 5 — Inbox route, conversation unread và row semantics
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Mục tiêu**
 
-Biến `/messages` thành Inbox đúng nghĩa trên mọi breakpoint và hiển thị unread từng conversation dựa trên backend state.
+Giữ Home feed ở main content desktop khi chưa chọn conversation, đồng thời cung cấp Inbox sử dụng được trên mobile/tablet và conversation list ở RightSidebar desktop; unread từng conversation dựa trên backend state.
 
 **Phạm vi**
 
-- Sửa Messages landing composition.
+- Sửa Messages landing composition nhưng giữ Home feed desktop khi chưa chọn conversation.
 - Conversation list xuất hiện trong main content ở mobile/tablet và RightSidebar ở desktop không duplicate UI state.
 - Unread row visual/count, semantic link/button, group/direct preview, deleted/system fallback.
 - Receive/read-state update preview/order/unread cùng cache.
@@ -897,7 +897,7 @@ GET conversations -> responsive list -> unread row. Receive -> message upsert + 
 
 **Gate hoàn thành**
 
-- `/messages` không còn render Home.
+- `/messages` giữ Home feed ở main content desktop; mobile/tablet mở Inbox list và desktop có list ở RightSidebar.
 - Inbox accessible trên mobile/desktop.
 - Per-row unread và Messages badge cùng authoritative state.
 - Receive/read-state duplicate không tạo count/order lỗi.

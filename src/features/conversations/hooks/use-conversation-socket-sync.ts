@@ -13,6 +13,7 @@ import {
   applyConversationReadState,
   clearConversationHistoryCaches,
   removeConversationCaches,
+  sortConversations,
 } from '../utils/conversation-cache';
 import {
   clearConversationReopenedMarker,
@@ -57,7 +58,6 @@ export const useConversationSocketSync = (socket: Socket | null) => {
   const router = useRouter();
   const pathnameRef = useRef(pathname);
   const recentMessageEventsRef = useRef(new Map<string, string>());
-  const highestReadStateVersionRef = useRef(-1);
 
   useEffect(() => {
     pathnameRef.current = pathname;
@@ -65,7 +65,6 @@ export const useConversationSocketSync = (socket: Socket | null) => {
 
   useEffect(() => {
     recentMessageEventsRef.current.clear();
-    highestReadStateVersionRef.current = -1;
     if (!socket) return;
     const recentMessageEvents = recentMessageEventsRef.current;
 
@@ -89,7 +88,10 @@ export const useConversationSocketSync = (socket: Socket | null) => {
           router.replace('/messages');
         }
         void removeConversationCaches(queryClient, event.conversation_id).then(() =>
-          queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY }),
+          Promise.all([
+            queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY }),
+            queryClient.invalidateQueries({ queryKey: conversationKeys.unreadSummary() }),
+          ]),
         );
         return;
       }
@@ -143,8 +145,8 @@ export const useConversationSocketSync = (socket: Socket | null) => {
       queryClient.setQueryData<Conversation[]>(CONVERSATIONS_QUERY_KEY, (conversations) => {
         if (!conversations || !hasConversation) return conversations;
 
-        return conversations
-          .map((conversation) =>
+        return sortConversations(
+          conversations.map((conversation) =>
             conversation._id === newMessage.conversation_id
               ? {
                   ...conversation,
@@ -152,35 +154,33 @@ export const useConversationSocketSync = (socket: Socket | null) => {
                   last_message_preview: {
                     message_id: newMessage._id,
                     sender_id: newMessage.sender_id,
+                    sender_info: newMessage.sender_info,
+                    kind: newMessage.kind,
                     content: newMessage.content,
                     message_type: messageType,
                   },
                 }
               : conversation,
-          )
-          .sort((first, second) => {
-            if (first.is_pinned !== second.is_pinned) return first.is_pinned ? -1 : 1;
-            return (
-              new Date(second.last_message_at || 0).getTime() -
-              new Date(first.last_message_at || 0).getTime()
-            );
-          });
+          ),
+        );
       });
 
-      if (!hasConversation) {
-        void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
-      }
+      void queryClient.invalidateQueries({
+        queryKey: CONVERSATIONS_QUERY_KEY,
+        exact: true,
+        refetchType: 'active',
+      });
+      void queryClient.invalidateQueries({
+        queryKey: conversationKeys.unreadSummary(),
+        exact: true,
+        refetchType: 'active',
+      });
     };
 
     const handleReadState = (event: ConversationReadStateEvent) => {
       if (!event?.conversation_id || !Number.isSafeInteger(event.version) || event.version < 0) {
         return;
       }
-      if (event.version < highestReadStateVersionRef.current) return;
-      highestReadStateVersionRef.current = Math.max(
-        highestReadStateVersionRef.current,
-        event.version,
-      );
       const didCompareVersion = applyConversationReadState(queryClient, event);
       if (didCompareVersion) return;
       void queryClient.invalidateQueries({
@@ -264,6 +264,9 @@ export const useConversationSocketSync = (socket: Socket | null) => {
         router.replace('/messages');
       }
       void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+      void queryClient.invalidateQueries({
+        queryKey: conversationKeys.unreadSummary(),
+      });
     };
 
     socket.on('@conversation:group-updated', handleGroupUpdated);
