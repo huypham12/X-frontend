@@ -2,6 +2,10 @@
 
 import { UsersRound } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import {
+  captureAuthSession,
+  isAuthSessionCurrent,
+} from '@/features/auth/stores/auth.store';
 import { FriendPresenceDot } from '@/features/users/components/friend-presence-dot';
 import { useFriendPresence } from '@/features/users/hooks/use-friend-presence';
 import { useCreateConversation } from '../hooks/use-create-conversation';
@@ -14,13 +18,23 @@ interface ConversationSearchResultsProps {
 }
 
 const SearchSectionSkeleton = () => (
-  <div className="space-y-3 px-4 py-3" aria-label="Loading search results">
-    {[1, 2].map((item) => (
-      <div key={item} className="flex animate-pulse items-center gap-3">
-        <div className="h-10 w-10 shrink-0 rounded-full bg-[#181818]" />
-        <div className="h-3 w-1/2 rounded bg-[#181818]" />
-      </div>
-    ))}
+  <div
+    role="status"
+    aria-busy="true"
+    className="space-y-3 px-4 py-3"
+    aria-label="Loading search results"
+  >
+    <div aria-hidden="true" className="contents">
+      {[1, 2].map((item) => (
+        <div
+          key={item}
+          className="flex animate-pulse items-center gap-3 motion-reduce:animate-none"
+        >
+          <div className="h-10 w-10 shrink-0 rounded-full bg-[#181818]" />
+          <div className="h-3 w-1/2 rounded bg-[#181818]" />
+        </div>
+      ))}
+    </div>
   </div>
 );
 
@@ -51,8 +65,10 @@ export const ConversationSearchResults = ({
   const isOpening = createConversation.isPending || reopenConversation.isPending;
 
   const openPersonConversation = async (personId: string) => {
+    const session = captureAuthSession();
     try {
       const result = await createConversation.mutateAsync(personId);
+      if (!isAuthSessionCurrent(session)) return;
       router.push(`/messages/${result.conversation._id}`);
       onConversationOpened();
     } catch {
@@ -61,8 +77,10 @@ export const ConversationSearchResults = ({
   };
 
   const openGroupConversation = async (conversationId: string) => {
+    const session = captureAuthSession();
     try {
       const result = await reopenConversation.mutateAsync(conversationId);
+      if (!isAuthSessionCurrent(session)) return;
       router.push(`/messages/${result.conversation._id}`);
       onConversationOpened();
     } catch {

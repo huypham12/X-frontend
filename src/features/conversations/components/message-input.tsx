@@ -9,6 +9,10 @@ import { MediaPreviewGrid } from '@/features/media/components/MediaPreviewGrid';
 import { MediaUploadButton } from '@/features/media/components/MediaUploadButton';
 import { useMessageComposerStore } from '../stores/message-composer.store';
 import { MessageReplyPreview } from './message-reply-preview';
+import {
+  captureAuthSession,
+  isAuthSessionCurrent,
+} from '@/features/auth/stores/auth.store';
 
 interface MessageInputProps {
   conversationId: string;
@@ -79,6 +83,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       return;
     }
 
+    const session = captureAuthSession();
     const result = await sendMessage({
       conversation_id: conversationId,
       conversation_type: conversationType,
@@ -86,7 +91,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       media_ids: readyMediaIds,
       ...(replyTo ? { reply_to_message_id: replyTo._id } : {}),
     });
-    if (result.status !== 'committed') return;
+    if (result.status !== 'committed' || !isAuthSessionCurrent(session)) return;
 
     clearCommittedDraft();
   };
@@ -99,8 +104,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleRetrySend = async () => {
+    const session = captureAuthSession();
     const result = await retryPendingMessage();
-    if (result?.status === 'committed') clearCommittedDraft();
+    if (result?.status === 'committed' && isAuthSessionCurrent(session)) {
+      clearCommittedDraft();
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -163,7 +171,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             onClick={clearReply}
             disabled={hasUnresolvedOperation}
             aria-label="Cancel reply"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors duration-200 hover:bg-[#181818] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50"
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors duration-200 hover:bg-[#181818] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50 motion-reduce:transition-none"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -247,9 +255,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           onSelectFiles={handleSelectFiles}
           maxFiles={4}
           disabled={isComposerDisabled || hasUnresolvedOperation || mediaItems.length >= 4}
-          className="p-2 text-twitter-blue hover:bg-[#181818] rounded-full transition flex-shrink-0"
+          className="min-h-11 min-w-11 rounded-full p-2 text-twitter-blue transition hover:bg-[#181818] motion-reduce:transition-none"
         >
-          <ImageIcon className="w-5 h-5" />
+          <ImageIcon aria-hidden="true" className="h-5 w-5" />
         </MediaUploadButton>
         
         <div className="relative" ref={emojiPickerRef}>
@@ -259,9 +267,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             aria-label="Choose an emoji"
             aria-expanded={showEmojiPicker}
-            className="p-2 text-twitter-blue hover:bg-[#181818] rounded-full transition flex-shrink-0"
+            className="min-h-11 min-w-11 flex-shrink-0 rounded-full p-2 text-twitter-blue transition hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none"
           >
-            <Smile className="w-5 h-5" />
+            <Smile aria-hidden="true" className="h-5 w-5" />
           </button>
           
           {showEmojiPicker && !isComposerDisabled && !hasUnresolvedOperation && (
@@ -305,9 +313,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
           type="submit" 
           disabled={isSendDisabled}
           aria-label="Send message"
-          className="p-2 text-twitter-blue disabled:opacity-50 hover:bg-[#181818] rounded-full transition flex-shrink-0"
+          className="min-h-11 min-w-11 flex-shrink-0 rounded-full p-2 text-twitter-blue transition hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50 motion-reduce:transition-none"
         >
-          <Send className="w-5 h-5" />
+          <Send aria-hidden="true" className="h-5 w-5" />
         </button>
       </form>
     </div>

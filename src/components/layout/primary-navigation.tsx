@@ -138,10 +138,18 @@ export const PrimaryNavigationLinks = ({
           <span className="relative">
             <NavigationIcon name={item.icon} active={isActive} />
             {badgeState ? (
-              <CountBadge
-                count={badgeState.count}
-                isLoading={badgeState.isInitialLoading}
-              />
+              <>
+                <CountBadge
+                  count={badgeState.count}
+                  isLoading={badgeState.isInitialLoading}
+                />
+                {badgeState.isSyncing && !badgeState.isInitialLoading ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -bottom-1 -right-1 size-1.5 rounded-full bg-[#a1a1aa] animate-pulse motion-reduce:animate-none"
+                  />
+                ) : null}
+              </>
             ) : null}
           </span>
           <span className={mode === 'desktop' ? (isActive ? 'font-bold' : '') : 'sr-only'}>
@@ -159,7 +167,7 @@ export const ReconnectStatus = ({ mobile }: { mobile?: boolean }) => (
     aria-atomic="true"
     className={
       mobile
-        ? 'absolute -top-8 left-1/2 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-[#2f3336] bg-black px-3 py-1 text-xs text-[#a1a1aa]'
+        ? 'pointer-events-none absolute -top-8 left-1/2 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-[#2f3336] bg-black px-3 py-1 text-xs text-[#a1a1aa]'
         : 'mt-3 flex items-center gap-2 px-3 text-xs font-normal text-[#a1a1aa]'
     }
   >

@@ -5,7 +5,11 @@ import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { useAuthStore } from '@/features/auth/stores/auth.store';
+import {
+  captureAuthSession,
+  isAuthSessionCurrent,
+  useAuthStore,
+} from '@/features/auth/stores/auth.store';
 import { mediaService } from '@/features/media/api/media.service';
 import type { MediaMetadata } from '@/features/media/types/media.type';
 import { userService } from '@/features/users/api/user.service';
@@ -129,6 +133,7 @@ export const useGroupActions = (conversation: GroupConversation) => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const currentUserId = useAuthStore((state) => state.user?._id);
+  const session = captureAuthSession();
   const isAdmin = isCurrentUserGroupAdmin(conversation, currentUserId);
   const invalidateGroupData = async () => {
     await Promise.all([
@@ -137,19 +142,22 @@ export const useGroupActions = (conversation: GroupConversation) => {
     ]);
   };
   const handleDepartureSuccess = async (message: string) => {
+    if (!isAuthSessionCurrent(session)) return;
     clearConversationUiState(conversation._id);
     await removeConversationCaches(queryClient, conversation._id);
+    if (!isAuthSessionCurrent(session)) return;
     router.replace('/messages');
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY }),
       queryClient.invalidateQueries({ queryKey: conversationKeys.unreadSummary() }),
     ]);
-    toast.success(message);
+    if (isAuthSessionCurrent(session)) toast.success(message);
   };
   const updateMutation = useMutation({
     mutationFn: (payload: UpdateGroupPayload) =>
       conversationsApi.updateGroupInfo(conversation._id, payload),
     onSuccess: async (_result, payload) => {
+      if (!isAuthSessionCurrent(session)) return;
       queryClient.setQueryData<Conversation[]>(CONVERSATIONS_QUERY_KEY, (conversations) =>
         conversations?.map((currentConversation) =>
           currentConversation._id === conversation._id && currentConversation.type === 'group'
@@ -158,9 +166,10 @@ export const useGroupActions = (conversation: GroupConversation) => {
         ),
       );
       await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
-      toast.success('Group details updated.');
+      if (isAuthSessionCurrent(session)) toast.success('Group details updated.');
     },
     onError: (error) => {
+      if (!isAuthSessionCurrent(session)) return;
       toast.error(getErrorMessage(error, 'Could not update the group.'));
     },
   });
@@ -168,10 +177,12 @@ export const useGroupActions = (conversation: GroupConversation) => {
     mutationFn: (memberIds: string[]) =>
       conversationsApi.addGroupMembers(conversation._id, [...new Set(memberIds)]),
     onSuccess: async () => {
+      if (!isAuthSessionCurrent(session)) return;
       await invalidateGroupData();
-      toast.success('Members added to the group.');
+      if (isAuthSessionCurrent(session)) toast.success('Members added to the group.');
     },
     onError: (error) => {
+      if (!isAuthSessionCurrent(session)) return;
       toast.error(getErrorMessage(error, 'Could not add these members.'));
     },
   });
@@ -179,10 +190,12 @@ export const useGroupActions = (conversation: GroupConversation) => {
     mutationFn: (memberId: string) =>
       conversationsApi.removeGroupMember(conversation._id, memberId),
     onSuccess: async () => {
+      if (!isAuthSessionCurrent(session)) return;
       await invalidateGroupData();
-      toast.success('Member removed from the group.');
+      if (isAuthSessionCurrent(session)) toast.success('Member removed from the group.');
     },
     onError: (error) => {
+      if (!isAuthSessionCurrent(session)) return;
       toast.error(getErrorMessage(error, 'Could not remove this member.'));
     },
   });
@@ -190,6 +203,7 @@ export const useGroupActions = (conversation: GroupConversation) => {
     mutationFn: () => conversationsApi.leaveGroup(conversation._id),
     onSuccess: () => handleDepartureSuccess('You left the group.'),
     onError: (error) => {
+      if (!isAuthSessionCurrent(session)) return;
       if (getErrorCode(error) === SOLE_ADMIN_CANNOT_LEAVE_CODE) {
         toast.error('Choose a new admin before leaving the group.');
         return;
@@ -205,6 +219,7 @@ export const useGroupActions = (conversation: GroupConversation) => {
     onSuccess: () =>
       handleDepartureSuccess('Admin transferred. You left the group.'),
     onError: (error) => {
+      if (!isAuthSessionCurrent(session)) return;
       if (getErrorCode(error) === ADMIN_TRANSFER_CONFLICT_CODE) {
         void queryClient.invalidateQueries({
           queryKey: GROUP_MEMBERS_QUERY_KEY(conversation._id),

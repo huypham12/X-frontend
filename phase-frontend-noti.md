@@ -1248,7 +1248,7 @@ System branch có thể fallback tạm về immutable generic row; không revert
 
 ### Phase 9 — Cross-surface resilience, accessibility và quality gate
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Mục tiêu**
 

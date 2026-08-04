@@ -3,7 +3,11 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { useAuthStore } from '@/features/auth/stores/auth.store';
+import {
+  captureAuthSession,
+  isAuthSessionCurrent,
+  useAuthStore,
+} from '@/features/auth/stores/auth.store';
 import { mediaService } from '@/features/media/api/media.service';
 import { userService } from '@/features/users/api/user.service';
 import type { Friend } from '@/features/users/types/user.type';
@@ -51,6 +55,7 @@ export const useCreateGroupConversation = () => {
   const queryClient = useQueryClient();
   const router = useRouter();
   const closeDetails = useConversationDetailsStore((state) => state.closeDetails);
+  const session = captureAuthSession();
 
   return useMutation({
     mutationFn: async ({ name, members, avatarFile }: CreateGroupMutationInput) => {
@@ -72,11 +77,14 @@ export const useCreateGroupConversation = () => {
       });
     },
     onSuccess: async (group) => {
+      if (!isAuthSessionCurrent(session)) return;
       await queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+      if (!isAuthSessionCurrent(session)) return;
       closeDetails();
       router.push(`/messages/${group._id}`);
     },
     onError: (error) => {
+      if (!isAuthSessionCurrent(session)) return;
       toast.error(getErrorMessage(error));
     },
   });

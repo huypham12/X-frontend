@@ -22,6 +22,7 @@ export const useSocket = () => {
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const isSessionReady = useAuthStore(selectIsSessionReady);
+  const currentUserId = useAuthStore((state) => state.user?._id ?? null);
   const logout = useAuthStore((state) => state.logout);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -98,7 +99,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setSocket(null);
       setIsConnected(false);
     };
-  }, [isSessionReady, logout]);
+  }, [currentUserId, isSessionReady, logout]);
 
   return (
     <SocketContext.Provider value={{ socket, isConnected }}>

@@ -23,6 +23,10 @@ import { CONVERSATIONS_QUERY_KEY } from './use-conversations';
 import { MESSAGE_CONTEXT_QUERY_KEY } from './use-message-context';
 import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import { useMessageComposerStore } from '../stores/message-composer.store';
+import {
+  captureAuthSession,
+  isAuthSessionCurrent,
+} from '@/features/auth/stores/auth.store';
 
 interface ApiErrorBody {
   message?: string;
@@ -301,9 +305,11 @@ const getErrorMessage = (error: unknown, fallbackMessage: string) => {
 
 export const useMessageActions = (conversationId: string) => {
   const queryClient = useQueryClient();
+  const session = captureAuthSession();
   const revokeMutation = useMutation({
     mutationFn: (messageId: string) => conversationsApi.revokeMessage(messageId),
     onSuccess: async (_result, messageId) => {
+      if (!isAuthSessionCurrent(session)) return;
       syncRevokedMessageCaches(queryClient, {
         conversation_id: conversationId,
         message_id: messageId,
@@ -311,12 +317,14 @@ export const useMessageActions = (conversationId: string) => {
       await refreshRevokedMessageQueries(queryClient, conversationId);
     },
     onError: (error) => {
+      if (!isAuthSessionCurrent(session)) return;
       toast.error(getErrorMessage(error, 'Could not revoke this message.'));
     },
   });
   const deleteMutation = useMutation({
     mutationFn: (messageId: string) => conversationsApi.deleteMessage(messageId),
     onSuccess: async (_result, messageId) => {
+      if (!isAuthSessionCurrent(session)) return;
       const event: MessageDeletedForMeEvent = {
         conversation_id: conversationId,
         message_id: messageId,
@@ -326,6 +334,7 @@ export const useMessageActions = (conversationId: string) => {
       await refreshDeletedMessageQueries(queryClient, event);
     },
     onError: (error) => {
+      if (!isAuthSessionCurrent(session)) return;
       toast.error(getErrorMessage(error, 'Could not delete this message.'));
     },
   });
@@ -335,6 +344,7 @@ export const useMessageActions = (conversationId: string) => {
         ? conversationsApi.unreactMessage(messageId)
         : conversationsApi.reactMessage(messageId, emoji),
     onSuccess: async (state, { messageId }) => {
+      if (!isAuthSessionCurrent(session)) return;
       syncReactionUpdatedCaches(queryClient, {
         conversation_id: conversationId,
         message_id: messageId,
@@ -346,6 +356,7 @@ export const useMessageActions = (conversationId: string) => {
       });
     },
     onError: async (error, { messageId }) => {
+      if (!isAuthSessionCurrent(session)) return;
       toast.error(getErrorMessage(error, 'Could not update this reaction.'));
       await refreshReactionQueries(queryClient, conversationId, messageId);
     },

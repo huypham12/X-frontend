@@ -27,23 +27,48 @@ interface MessageListProps {
 
 const MessageContextSkeleton = () => (
   <div
+    role="status"
+    aria-busy="true"
     className="flex flex-1 flex-col justify-center gap-4 py-6"
     aria-label="Loading message context"
   >
-    <div className="flex justify-start">
+    <div aria-hidden="true" className="contents">
+      <div className="flex justify-start">
+        <div className="h-14 w-2/3 animate-pulse rounded-2xl rounded-bl-sm bg-[#181818] motion-reduce:animate-none" />
+      </div>
+      <div className="flex justify-end">
+        <div className="h-20 w-3/4 animate-pulse rounded-2xl rounded-br-sm bg-[#181818] motion-reduce:animate-none" />
+      </div>
+      <div className="flex justify-start">
+        <div className="h-12 w-1/2 animate-pulse rounded-2xl rounded-bl-sm bg-[#181818] motion-reduce:animate-none" />
+      </div>
+    </div>
+  </div>
+);
+
+const MessageTimelineSkeleton = () => (
+  <div role="status" aria-busy="true" aria-label="Loading messages" className="flex-1 p-4">
+    <div aria-hidden="true" className="flex h-full flex-col justify-end gap-4">
       <div className="h-14 w-2/3 animate-pulse rounded-2xl rounded-bl-sm bg-[#181818] motion-reduce:animate-none" />
-    </div>
-    <div className="flex justify-end">
-      <div className="h-20 w-3/4 animate-pulse rounded-2xl rounded-br-sm bg-[#181818] motion-reduce:animate-none" />
-    </div>
-    <div className="flex justify-start">
+      <div className="ml-auto h-20 w-3/4 animate-pulse rounded-2xl rounded-br-sm bg-[#181818] motion-reduce:animate-none" />
       <div className="h-12 w-1/2 animate-pulse rounded-2xl rounded-bl-sm bg-[#181818] motion-reduce:animate-none" />
     </div>
   </div>
 );
 
 export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useMessages(conversationId);
+  const {
+    data,
+    isLoading,
+    isError,
+    isFetching,
+    isRefetchError,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+  } = useMessages(conversationId);
   const { user } = useAuthStore();
   const targetConversationId = useConversationDetailsStore((state) => state.targetConversationId);
   const storedTargetMessageId = useConversationDetailsStore((state) => state.targetMessageId);
@@ -156,10 +181,23 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
   }, [contextData, data, isDeletePending, messageToDelete]);
 
   useEffect(() => {
-    if (!targetMessageId && inView && hasNextPage && !isFetchingNextPage) {
+    if (
+      !targetMessageId &&
+      inView &&
+      hasNextPage &&
+      !isFetchingNextPage &&
+      !isFetchNextPageError
+    ) {
       void fetchNextPage();
     }
-  }, [targetMessageId, inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [
+    targetMessageId,
+    inView,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    fetchNextPage,
+  ]);
 
   useEffect(() => {
     if (targetConversationId && targetConversationId !== conversationId) {
@@ -204,17 +242,26 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
   }, [consumeNewMessagesThrough, latestAttempt, navigationReadTargetId]);
 
   if (!targetMessageId && isLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-twitter-blue border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <MessageTimelineSkeleton />;
   }
 
-  if (!targetMessageId && isError) {
+  if (!targetMessageId && isError && !data) {
     return (
-      <div className="flex-1 flex items-center justify-center text-red-500">
-        Failed to load messages
+      <div
+        role="alert"
+        className="flex flex-1 flex-col items-center justify-center px-6 text-center"
+      >
+        <p className="font-semibold text-white">Could not load messages</p>
+        <p className="mt-2 text-sm text-gray-400">Check your connection and try again.</p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          disabled={isFetching}
+          className="mt-5 flex min-h-11 items-center gap-2 rounded-full border border-[#536471] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none"
+        >
+          <RotateCcw className="h-4 w-4" aria-hidden="true" />
+          {isFetching ? 'Retrying…' : 'Try again'}
+        </button>
       </div>
     );
   }
@@ -225,8 +272,26 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
         <div
           ref={messageListRef}
           onScroll={handleScroll}
+          aria-label="Conversation messages"
+          aria-busy={(isFetching || isFetchingNextPage) || undefined}
           className="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-4"
         >
+      {!targetMessageId && isRefetchError && !isFetchNextPageError && (
+        <div
+          role="status"
+          className="mb-4 flex min-h-11 items-center justify-between gap-3 rounded-xl border border-[#2f3336] bg-[#121212] px-3 py-2 text-xs text-gray-300"
+        >
+          <span>Could not sync the latest messages.</span>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            className="min-h-11 shrink-0 rounded-full px-3 font-semibold text-white hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isFetching ? 'Retrying…' : 'Retry'}
+          </button>
+        </div>
+      )}
       {targetMessageId && (
         <div className="sticky top-0 z-[1] mb-4 flex justify-center bg-black/90 py-2 backdrop-blur-sm">
           <button
@@ -261,9 +326,27 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
           {!targetMessageId && hasNextPage && (
             <div ref={loadMoreRef} className="flex justify-center py-4">
               {isFetchingNextPage ? (
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-twitter-blue border-t-transparent" />
+                <div role="status" aria-label="Loading older messages">
+                  <div
+                    aria-hidden="true"
+                    className="h-5 w-5 animate-spin rounded-full border-2 border-twitter-blue border-t-transparent motion-reduce:animate-none"
+                  />
+                </div>
+              ) : isFetchNextPageError ? (
+                <div role="status" className="text-center">
+                  <p className="text-sm text-gray-400">Could not load older messages.</p>
+                  <button
+                    type="button"
+                    onClick={() => void fetchNextPage()}
+                    className="mt-2 min-h-11 rounded-full px-5 text-sm font-semibold text-[#1d9bf0] hover:bg-[#1d9bf0]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1d9bf0]"
+                  >
+                    Try again
+                  </button>
+                </div>
               ) : (
-                <span className="text-sm text-gray-500">Load more</span>
+                <span aria-hidden="true" className="text-sm text-gray-500">
+                  Load more
+                </span>
               )}
             </div>
           )}

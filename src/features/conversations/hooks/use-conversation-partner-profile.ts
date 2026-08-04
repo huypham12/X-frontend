@@ -4,6 +4,10 @@ import axios from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { userService } from '@/features/users/api/user.service';
+import {
+  captureAuthSession,
+  isAuthSessionCurrent,
+} from '@/features/auth/stores/auth.store';
 
 interface ApiErrorBody {
   message?: string;
@@ -31,6 +35,7 @@ export const useConversationPartnerProfile = (username?: string) =>
 export const useConversationPartnerBlockAction = (username?: string) => {
   const queryClient = useQueryClient();
   const profileQuery = useConversationPartnerProfile(username);
+  const session = captureAuthSession();
   const mutation = useMutation({
     mutationFn: async (shouldBlock: boolean) => {
       const partnerId = profileQuery.data?._id;
@@ -43,14 +48,18 @@ export const useConversationPartnerBlockAction = (username?: string) => {
       }
     },
     onSuccess: async (_data, shouldBlock) => {
+      if (!isAuthSessionCurrent(session)) return;
       if (username) {
         await queryClient.invalidateQueries({
           queryKey: conversationPartnerProfileQueryKey(username),
         });
       }
-      toast.success(shouldBlock ? 'User blocked.' : 'User unblocked.');
+      if (isAuthSessionCurrent(session)) {
+        toast.success(shouldBlock ? 'User blocked.' : 'User unblocked.');
+      }
     },
     onError: (error, shouldBlock) => {
+      if (!isAuthSessionCurrent(session)) return;
       toast.error(
         getErrorMessage(error, shouldBlock ? 'Could not block this user.' : 'Could not unblock this user.'),
       );

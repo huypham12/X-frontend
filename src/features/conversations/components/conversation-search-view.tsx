@@ -42,6 +42,11 @@ const getMessageSnippet = (message: Message) => {
   return 'Message';
 };
 
+const formatMessageTimestamp = (value: string) => {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? format(date, 'MMM d, yyyy · h:mm a') : 'Unknown time';
+};
+
 export const ConversationSearchView = ({ conversation }: ConversationSearchViewProps) => {
   const [keyword, setKeyword] = useState('');
   const currentUserId = useAuthStore((state) => state.user?._id);
@@ -56,6 +61,7 @@ export const ConversationSearchView = ({ conversation }: ConversationSearchViewP
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isFetchNextPageError,
   } = useMessageSearch(conversation._id, keyword);
 
   const messages = useMemo(() => {
@@ -89,20 +95,25 @@ export const ConversationSearchView = ({ conversation }: ConversationSearchViewP
         />
       </div>
 
-      <div aria-live="polite" className="mt-5 min-h-0 flex-1">
+      <div className="mt-5 min-h-0 flex-1">
         {!keyword.trim() ? (
           <div className="flex flex-col items-center px-4 py-14 text-center text-gray-500">
             <Search className="mb-3 h-7 w-7" aria-hidden="true" />
             <p className="text-sm">Enter a word or phrase to search this conversation.</p>
           </div>
         ) : isDebouncing || isLoading ? (
-          <div className="space-y-3" aria-label="Searching messages">
-            {[0, 1, 2].map((item) => (
-              <div key={item} className="animate-pulse rounded-xl bg-[#121212] p-4">
-                <div className="h-3 w-24 rounded bg-[#2f3336]" />
-                <div className="mt-3 h-4 w-full rounded bg-[#2f3336]" />
-              </div>
-            ))}
+          <div role="status" aria-busy="true" className="space-y-3" aria-label="Searching messages">
+            <div aria-hidden="true" className="contents">
+              {[0, 1, 2].map((item) => (
+                <div
+                  key={item}
+                  className="animate-pulse rounded-xl bg-[#121212] p-4 motion-reduce:animate-none"
+                >
+                  <div className="h-3 w-24 rounded bg-[#2f3336]" />
+                  <div className="mt-3 h-4 w-full rounded bg-[#2f3336]" />
+                </div>
+              ))}
+            </div>
           </div>
         ) : isError ? (
           <div className="flex flex-col items-center px-4 py-12 text-center">
@@ -112,7 +123,7 @@ export const ConversationSearchView = ({ conversation }: ConversationSearchViewP
               onClick={() => {
                 void refetch();
               }}
-              className="mt-4 rounded-full border border-[#536471] px-4 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              className="mt-4 min-h-11 rounded-full border border-[#536471] px-5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none"
             >
               Retry
             </button>
@@ -136,7 +147,7 @@ export const ConversationSearchView = ({ conversation }: ConversationSearchViewP
                         : getSenderLabel(message, conversation, currentUserId)}
                     </span>
                     <time dateTime={message.send_at} className="shrink-0">
-                      {format(new Date(message.send_at), 'MMM d, yyyy · h:mm a')}
+                      {formatMessageTimestamp(message.send_at)}
                     </time>
                   </div>
                   <p
@@ -149,7 +160,7 @@ export const ConversationSearchView = ({ conversation }: ConversationSearchViewP
                   <button
                     type="button"
                     onClick={() => focusMessage(conversation._id, message._id)}
-                    className="mt-3 rounded-full border border-[#536471] px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                    className="mt-3 min-h-11 rounded-full border border-[#536471] px-4 text-xs font-semibold text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none"
                   >
                     View in conversation
                   </button>
@@ -157,19 +168,26 @@ export const ConversationSearchView = ({ conversation }: ConversationSearchViewP
               );
             })}
 
-            {hasNextPage && (
+            {(hasNextPage || isFetchNextPageError) && (
               <button
                 type="button"
                 onClick={() => {
                   void fetchNextPage();
                 }}
                 disabled={isFetchingNextPage}
-                className="flex w-full items-center justify-center gap-2 rounded-full border border-[#536471] px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-[#536471] px-4 text-sm font-semibold text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
               >
                 {isFetchingNextPage && (
-                  <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <LoaderCircle
+                    className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                    aria-hidden="true"
+                  />
                 )}
-                {isFetchingNextPage ? 'Loading' : 'Load more'}
+                {isFetchingNextPage
+                  ? 'Loading'
+                  : isFetchNextPageError
+                    ? 'Could not load more. Try again'
+                    : 'Load more'}
               </button>
             )}
           </div>

@@ -4,7 +4,11 @@ import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { useAuthStore } from '@/features/auth/stores/auth.store';
+import {
+  captureAuthSession,
+  isAuthSessionCurrent,
+  useAuthStore,
+} from '@/features/auth/stores/auth.store';
 import { conversationsApi } from '../api/conversations.api';
 import { CONVERSATIONS_QUERY_KEY } from './use-conversations';
 import { useConversationDetailsStore } from '../stores/conversation-details.store';
@@ -50,6 +54,7 @@ export const useConversationActions = (conversation: Conversation) => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const currentUserId = useAuthStore((state) => state.user?._id);
+  const session = captureAuthSession();
   const closeDetails = useConversationDetailsStore((state) => state.closeDetails);
   const activeMute = getActiveConversationMute(conversation, currentUserId);
 
@@ -93,12 +98,16 @@ export const useConversationActions = (conversation: Conversation) => {
       return { previousConversations };
     },
     onError: (error, shouldPin, context) => {
+      if (!isAuthSessionCurrent(session)) return;
       restoreConversationCache(context);
       toast.error(
         getErrorMessage(error, shouldPin ? 'Could not pin conversation.' : 'Could not unpin conversation.'),
       );
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY }),
+    onSettled: () =>
+      isAuthSessionCurrent(session)
+        ? queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY })
+        : undefined,
   });
 
   const muteMutation = useMutation({
@@ -128,10 +137,14 @@ export const useConversationActions = (conversation: Conversation) => {
       return { previousConversations };
     },
     onError: (error, _durationHours, context) => {
+      if (!isAuthSessionCurrent(session)) return;
       restoreConversationCache(context);
       toast.error(getErrorMessage(error, 'Could not mute conversation.'));
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY }),
+    onSettled: () =>
+      isAuthSessionCurrent(session)
+        ? queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY })
+        : undefined,
   });
 
   const unmuteMutation = useMutation({
@@ -150,15 +163,20 @@ export const useConversationActions = (conversation: Conversation) => {
       return { previousConversations };
     },
     onError: (error, _variables, context) => {
+      if (!isAuthSessionCurrent(session)) return;
       restoreConversationCache(context);
       toast.error(getErrorMessage(error, 'Could not unmute conversation.'));
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY }),
+    onSettled: () =>
+      isAuthSessionCurrent(session)
+        ? queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY })
+        : undefined,
   });
 
   const hideMutation = useMutation({
     mutationFn: () => conversationsApi.hideConversation(conversation._id),
     onSuccess: async () => {
+      if (!isAuthSessionCurrent(session)) return;
       queryClient.setQueryData<Conversation[]>(CONVERSATIONS_QUERY_KEY, (currentConversations) =>
         currentConversations?.filter(
           (currentConversation) => currentConversation._id !== conversation._id,
@@ -172,6 +190,7 @@ export const useConversationActions = (conversation: Conversation) => {
       ]);
     },
     onError: (error) => {
+      if (!isAuthSessionCurrent(session)) return;
       toast.error(getErrorMessage(error, 'Could not hide conversation from your inbox.'));
     },
   });
@@ -179,6 +198,7 @@ export const useConversationActions = (conversation: Conversation) => {
   const clearHistoryMutation = useMutation({
     mutationFn: () => conversationsApi.clearConversationHistory(conversation._id),
     onSuccess: async () => {
+      if (!isAuthSessionCurrent(session)) return;
       clearConversationHistoryCaches(queryClient, conversation._id);
       const composer = useMessageComposerStore.getState();
       if (composer.conversationId === conversation._id) composer.clearReply();
@@ -190,6 +210,7 @@ export const useConversationActions = (conversation: Conversation) => {
       ]);
     },
     onError: (error) => {
+      if (!isAuthSessionCurrent(session)) return;
       toast.error(getErrorMessage(error, 'Could not delete this chat history.'));
     },
   });

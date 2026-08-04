@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { BellOff, RotateCcw } from 'lucide-react';
 import { useInView } from 'react-intersection-observer';
 import { useNotifications } from '../hooks/use-notifications';
@@ -46,7 +46,16 @@ export const NotificationFeed = ({
     fetchNextPage,
     refetch,
   } = useNotifications();
-  const notifications = flattenNotifications(data?.pages);
+  const notifications = useMemo(() => flattenNotifications(data?.pages), [data?.pages]);
+  const notificationIds = useMemo(
+    () => notifications.map((notification) => notification._id),
+    [notifications],
+  );
+  const previousNotificationIdsRef = useRef<string[]>([]);
+  const focusedNotificationIdRef = useRef<string | null>(null);
+  const notificationRowsRef = useRef(new Map<string, HTMLLIElement>());
+  const emptyStateRef = useRef<HTMLDivElement>(null);
+  const focusStatusRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     if (!inView || !hasNextPage || isFetchingNextPage || isFetchNextPageError) return;
@@ -59,9 +68,49 @@ export const NotificationFeed = ({
     isFetchingNextPage,
   ]);
 
+  useLayoutEffect(() => {
+    const previousIds = previousNotificationIdsRef.current;
+    previousNotificationIdsRef.current = notificationIds;
+    const focusedId = focusedNotificationIdRef.current;
+    if (!focusedId || notificationIds.includes(focusedId)) return;
+    if (!document.hasFocus()) {
+      focusedNotificationIdRef.current = null;
+      return;
+    }
+
+    const removedIndex = previousIds.indexOf(focusedId);
+    const nextFocusId =
+      removedIndex >= 0
+        ? notificationIds[Math.min(removedIndex, notificationIds.length - 1)]
+        : undefined;
+    const nextRow = nextFocusId ? notificationRowsRef.current.get(nextFocusId) : undefined;
+    const nextControl = nextRow?.querySelector<HTMLElement>(
+      'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+    );
+
+    if (nextControl || nextRow) {
+      (nextControl ?? nextRow)?.focus();
+      focusedNotificationIdRef.current = nextFocusId ?? null;
+      if (focusStatusRef.current) {
+        focusStatusRef.current.textContent = 'Notification removed. Focus moved to the next item.';
+      }
+      return;
+    }
+
+    emptyStateRef.current?.focus();
+    focusedNotificationIdRef.current = null;
+    if (focusStatusRef.current) {
+      focusStatusRef.current.textContent = 'Notification removed. No notifications remain.';
+    }
+  }, [notificationIds]);
+
+  const focusStatus = (
+    <span ref={focusStatusRef} className="sr-only" aria-live="polite" aria-atomic="true" />
+  );
+
   if (isPending) {
     return (
-      <div aria-busy="true" aria-label="Đang tải thông báo">
+      <div role="status" aria-busy="true" aria-label="Đang tải thông báo">
         <NotificationFeedSkeleton />
       </div>
     );
@@ -90,6 +139,7 @@ export const NotificationFeed = ({
   if (notifications.length === 0) {
     return (
       <div>
+        {focusStatus}
         {isRefetchError && (
           <div
             role="status"
@@ -105,7 +155,11 @@ export const NotificationFeed = ({
             </button>
           </div>
         )}
-        <div className="flex min-h-72 flex-col items-center justify-center px-6 text-center">
+        <div
+          ref={emptyStateRef}
+          tabIndex={-1}
+          className="flex min-h-72 flex-col items-center justify-center px-6 text-center outline-none"
+        >
           <BellOff className="h-8 w-8 text-gray-500" aria-hidden="true" />
           <h2 className="mt-4 text-lg font-bold text-white">Chưa có thông báo</h2>
           <p className="mt-2 max-w-sm text-sm leading-5 text-gray-500">
@@ -117,7 +171,8 @@ export const NotificationFeed = ({
   }
 
   return (
-    <div aria-busy={isFetching}>
+    <div aria-busy={isFetching || undefined}>
+      {focusStatus}
       {isRefetchError && !isFetchNextPageError && (
         <div
           role="status"
@@ -134,9 +189,31 @@ export const NotificationFeed = ({
         </div>
       )}
 
-      <ul aria-label="Danh sách thông báo">
+      <ul
+        aria-label="Danh sách thông báo"
+        onBlurCapture={(event) => {
+          const nextFocusedElement = event.relatedTarget;
+          if (
+            nextFocusedElement instanceof Node &&
+            event.currentTarget.contains(nextFocusedElement)
+          ) {
+            return;
+          }
+          if (nextFocusedElement !== null) focusedNotificationIdRef.current = null;
+        }}
+      >
         {notifications.map((notification) => (
-          <li key={notification._id}>
+          <li
+            key={notification._id}
+            ref={(node) => {
+              if (node) notificationRowsRef.current.set(notification._id, node);
+              else notificationRowsRef.current.delete(notification._id);
+            }}
+            tabIndex={-1}
+            onFocusCapture={() => {
+              focusedNotificationIdRef.current = notification._id;
+            }}
+          >
             <NotificationItem
               notification={notification}
               isMarkPending={pendingIds.has(notification._id)}

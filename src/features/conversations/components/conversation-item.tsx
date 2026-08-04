@@ -35,8 +35,13 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
     avatar = conversation.avatar_url || '/default-group.png';
   }
 
-  const timeAgo = conversation.last_message_at
-    ? formatDistanceToNow(new Date(conversation.last_message_at), { addSuffix: false })
+  const lastMessageDate = conversation.last_message_at
+    ? new Date(conversation.last_message_at)
+    : null;
+  const hasValidLastMessageDate =
+    lastMessageDate !== null && Number.isFinite(lastMessageDate.getTime());
+  const timeAgo = hasValidLastMessageDate
+    ? formatDistanceToNow(lastMessageDate, { addSuffix: false })
     : '';
 
   const isSentByMe = conversation.last_message_preview?.sender_id === currentUserId;
@@ -106,11 +111,12 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
             {title}
           </h3>
           {timeAgo && (
-            <span
+            <time
+              dateTime={conversation.last_message_at}
               className={`${isUnread ? 'text-[#1d9bf0]' : 'text-gray-500'} ml-2 flex-shrink-0 text-[13px]`}
             >
               {timeAgo}
-            </span>
+            </time>
           )}
         </div>
         

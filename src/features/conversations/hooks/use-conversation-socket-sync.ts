@@ -4,7 +4,11 @@ import { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
-import { useAuthStore } from '@/features/auth/stores/auth.store';
+import {
+  captureAuthSession,
+  isAuthSessionCurrent,
+  useAuthStore,
+} from '@/features/auth/stores/auth.store';
 import type { GroupUpdatedEvent } from '../types/group-action.type';
 import { CONVERSATIONS_QUERY_KEY } from './use-conversations';
 import { GROUP_MEMBERS_QUERY_KEY } from './use-group-members';
@@ -58,6 +62,7 @@ const rememberMessageEvent = (events: Map<string, string>, key: string, fingerpr
 };
 
 export const useConversationSocketSync = (socket: Socket | null) => {
+  const sessionRef = useRef(captureAuthSession());
   const queryClient = useQueryClient();
   const pathname = usePathname();
   const router = useRouter();
@@ -74,6 +79,7 @@ export const useConversationSocketSync = (socket: Socket | null) => {
     const recentMessageEvents = recentMessageEventsRef.current;
 
     const handleGroupUpdated = (event: GroupUpdatedEvent) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (!event?.conversation_id) return;
 
       const currentUserId = useAuthStore.getState().user?._id;
@@ -108,6 +114,7 @@ export const useConversationSocketSync = (socket: Socket | null) => {
     };
 
     const handleReceiveMessage = (newMessage: Message) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (!newMessage?.conversation_id) return;
       if (
         !rememberMessageEvent(
@@ -169,6 +176,7 @@ export const useConversationSocketSync = (socket: Socket | null) => {
     };
 
     const handleReadState = (event: ConversationReadStateEvent) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (!event?.conversation_id || !Number.isSafeInteger(event.version) || event.version < 0) {
         return;
       }
@@ -185,6 +193,7 @@ export const useConversationSocketSync = (socket: Socket | null) => {
     };
 
     const handleMessageRevoked = (event: MessageRevokedEvent) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (!event?.conversation_id || !event.message_id) return;
       if (!rememberMessageEvent(recentMessageEvents, `revoked:${event.message_id}`, 'revoked')) {
         return;
@@ -195,6 +204,7 @@ export const useConversationSocketSync = (socket: Socket | null) => {
     };
 
     const handleMessageDeletedForMe = (event: MessageDeletedForMeEvent) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (!event?.conversation_id || !event.message_id) return;
       if (!rememberMessageEvent(recentMessageEvents, `deleted:${event.message_id}`, 'deleted')) {
         return;
@@ -205,6 +215,7 @@ export const useConversationSocketSync = (socket: Socket | null) => {
     };
 
     const handleMessageReactionUpdated = (event: MessageReactionUpdatedEvent) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (!event?.conversation_id || !event.message_id) return;
       const fingerprint = event.reactions
         .map((reaction) => `${reaction.user_id}:${reaction.emoji}`)
@@ -227,6 +238,7 @@ export const useConversationSocketSync = (socket: Socket | null) => {
     };
 
     const handleHistoryCleared = (event: ConversationHistoryClearedEvent) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (!event?.conversation_id) return;
       if (wasConversationReopenedAfter(event.conversation_id, event.cleared_at)) return;
 

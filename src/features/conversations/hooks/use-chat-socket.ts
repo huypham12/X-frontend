@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSocket } from '@/providers/socket-provider';
+import {
+  captureAuthSession,
+  isAuthSessionCurrent,
+} from '@/features/auth/stores/auth.store';
 import { toast } from 'sonner';
 import { conversationPartnerProfileQueryKey } from './use-conversation-partner-profile';
 import type {
@@ -40,6 +44,7 @@ const isConflictError = (error?: ConversationSocketError) =>
   error?.code === CLIENT_MESSAGE_ID_CONFLICT_CODE;
 
 export const useChatSocket = (conversationId?: string, partnerUsername?: string) => {
+  const sessionRef = useRef(captureAuthSession());
   const { socket, isConnected } = useSocket();
   const queryClient = useQueryClient();
   const operationRef = useRef<PendingMessageOperation | null>(null);
@@ -47,6 +52,7 @@ export const useChatSocket = (conversationId?: string, partnerUsername?: string)
   const [pendingOperation, setPendingOperation] = useState<PendingMessageOperation | null>(null);
 
   const updateOperation = useCallback((operation: PendingMessageOperation | null) => {
+    if (!isAuthSessionCurrent(sessionRef.current)) return;
     operationRef.current = operation;
     setPendingOperation(operation);
   }, []);
@@ -55,6 +61,7 @@ export const useChatSocket = (conversationId?: string, partnerUsername?: string)
     if (!socket || !isConnected) return;
 
     const handleConversationError = (error: ConversationSocketError) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (error.code !== DIRECT_MESSAGE_BLOCKED_CODE) return;
       if (error.conversation_id && error.conversation_id !== conversationId) return;
 
@@ -75,6 +82,14 @@ export const useChatSocket = (conversationId?: string, partnerUsername?: string)
 
   const emitOperation = useCallback(
     (operation: PendingMessageOperation): Promise<SendMessageResult> => {
+      if (!isAuthSessionCurrent(sessionRef.current)) {
+        return Promise.resolve({
+          status: 'not_sent',
+          clientMessageId: operation.clientMessageId,
+          errorMessage: 'This send belongs to a previous signed-in session.',
+        });
+      }
+
       const sendingOperation = { ...operation, status: 'sending' as const, errorMessage: undefined };
       updateOperation(sendingOperation);
 
@@ -97,6 +112,15 @@ export const useChatSocket = (conversationId?: string, partnerUsername?: string)
           '@conversation:send',
           operation.payload,
           (timeoutError: Error | null, result?: ConversationSendAcknowledgement) => {
+            if (!isAuthSessionCurrent(sessionRef.current)) {
+              resolve({
+                status: 'not_sent',
+                clientMessageId: operation.clientMessageId,
+                errorMessage: 'This send belongs to a previous signed-in session.',
+              });
+              return;
+            }
+
             if (timeoutError) {
               const failedOperation = {
                 ...operation,
@@ -182,6 +206,15 @@ export const useChatSocket = (conversationId?: string, partnerUsername?: string)
 
   const sendMessage = useCallback(
     (draft: SendMessageDraft): Promise<SendMessageResult> => {
+      if (!isAuthSessionCurrent(sessionRef.current)) {
+        const clientMessageId = createClientMessageId();
+        return Promise.resolve({
+          status: 'not_sent',
+          clientMessageId,
+          errorMessage: 'This send belongs to a previous signed-in session.',
+        });
+      }
+
       const currentOperation = operationRef.current;
       if (currentOperation) return runOperation(currentOperation);
 
@@ -204,19 +237,23 @@ export const useChatSocket = (conversationId?: string, partnerUsername?: string)
   );
 
   const retryPendingMessage = useCallback(() => {
+    if (!isAuthSessionCurrent(sessionRef.current)) {
+      return Promise.resolve<SendMessageResult | null>(null);
+    }
     const operation = operationRef.current;
     if (!operation) return Promise.resolve<SendMessageResult | null>(null);
     return runOperation(operation);
   }, [runOperation]);
 
   const abandonPendingMessage = useCallback(() => {
+    if (!isAuthSessionCurrent(sessionRef.current)) return;
     const status = operationRef.current?.status;
     if (!status || status === 'sending' || status === 'failed_to_confirm') return;
     updateOperation(null);
   }, [updateOperation]);
 
   const emitTyping = (payload: { conversation_id: string, conversation_type: 'direct' | 'group', isTyping: boolean }) => {
-    if (socket && isConnected) {
+    if (socket && isConnected && isAuthSessionCurrent(sessionRef.current)) {
       const event = payload.isTyping ? '@conversation:typing_on' : '@conversation:typing_off';
       socket.emit(event, { conversation_id: payload.conversation_id, conversation_type: payload.conversation_type });
     }

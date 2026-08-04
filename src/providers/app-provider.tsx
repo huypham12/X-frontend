@@ -1,32 +1,24 @@
 'use client';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
 import { Toaster } from 'sonner';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 
 import { AuthInitializer } from './auth-initializer';
 import { PersonalSessionBoundary } from './personal-session-boundary';
 
 export default function AppProvider({ children }: { children: React.ReactNode }) {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 1000 * 60 * 5, // 5 minutes
-            retry: 1,
-            refetchOnWindowFocus: false,
-          },
-        },
-      })
+  const sessionBoundaryKey = useAuthStore(
+    (state) =>
+      `${state.sessionGeneration}:${state.isAuthenticated && state.user ? state.user._id : 'anonymous'}`,
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <PersonalSessionBoundary />
+    <>
       <AuthInitializer />
-      {children}
+      <PersonalSessionBoundary key={sessionBoundaryKey}>
+        {children}
+      </PersonalSessionBoundary>
       <Toaster position="bottom-center" richColors theme="dark" />
-    </QueryClientProvider>
+    </>
   );
 }

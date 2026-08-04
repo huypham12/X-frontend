@@ -17,10 +17,16 @@ export interface User {
 
 export type AuthenticationAttemptId = number;
 
+export interface AuthSessionToken {
+  generation: number;
+  userId: string | null;
+}
+
 export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isInitializing: boolean;
+  sessionGeneration: number;
   activeAuthenticationAttemptId: AuthenticationAttemptId | null;
   startAuthentication: () => AuthenticationAttemptId;
   setAuthenticationTokens: (
@@ -48,10 +54,28 @@ const clearLegacyPersistedAuth = () => {
 export const selectIsSessionReady = (state: AuthState) =>
   state.isAuthenticated && !state.isInitializing && state.user !== null;
 
+export const captureAuthSession = (): AuthSessionToken => {
+  const state = useAuthStore.getState();
+  return {
+    generation: state.sessionGeneration,
+    userId: state.isAuthenticated ? (state.user?._id ?? null) : null,
+  };
+};
+
+export const isAuthSessionCurrent = (session: AuthSessionToken) => {
+  const state = useAuthStore.getState();
+  return (
+    state.isAuthenticated &&
+    state.sessionGeneration === session.generation &&
+    state.user?._id === session.userId
+  );
+};
+
 export const useAuthStore = create<AuthState>()((set, get) => ({
   user: null,
   isAuthenticated: false,
   isInitializing: true,
+  sessionGeneration: 0,
   activeAuthenticationAttemptId: null,
 
   startAuthentication: () => {
@@ -62,6 +86,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       user: null,
       isAuthenticated: false,
       isInitializing: true,
+      sessionGeneration: get().sessionGeneration + 1,
       activeAuthenticationAttemptId: attemptId,
     });
     return attemptId;
@@ -104,6 +129,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       user,
       isAuthenticated: true,
       isInitializing: false,
+      sessionGeneration: get().sessionGeneration + 1,
       activeAuthenticationAttemptId: null,
     });
   },
@@ -116,6 +142,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       user: null,
       isAuthenticated: false,
       isInitializing: false,
+      sessionGeneration: get().sessionGeneration + 1,
       activeAuthenticationAttemptId: null,
     });
   },

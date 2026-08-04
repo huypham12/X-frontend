@@ -1,42 +1,34 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { useEffect, useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useConversationDetailsStore } from '@/features/conversations/stores/conversation-details.store';
 import { useMessageComposerStore } from '@/features/conversations/stores/message-composer.store';
 import { clearAllConversationReopenedMarkers } from '@/features/conversations/utils/conversation-reopen-state';
 
-interface SessionSnapshot {
-  isAuthenticated: boolean;
-  userId: string | null;
-}
+const createPersonalQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 1000 * 60 * 5,
+        retry: 1,
+        refetchOnWindowFocus: false,
+      },
+    },
+  });
 
-export function PersonalSessionBoundary() {
-  const queryClient = useQueryClient();
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const userId = useAuthStore((state) => state.user?._id ?? null);
-  const previousSessionRef = useRef<SessionSnapshot>({ isAuthenticated, userId });
+export function PersonalSessionBoundary({ children }: { children: React.ReactNode }) {
+  const [queryClient] = useState(createPersonalQueryClient);
 
   useEffect(() => {
-    const previousSession = previousSessionRef.current;
-    const sessionEnded = previousSession.isAuthenticated && !isAuthenticated;
-    const identityChanged =
-      previousSession.isAuthenticated &&
-      isAuthenticated &&
-      previousSession.userId !== null &&
-      userId !== null &&
-      previousSession.userId !== userId;
+    return () => {
+      void queryClient.cancelQueries();
+      queryClient.clear();
+      useConversationDetailsStore.getState().reset();
+      useMessageComposerStore.getState().reset();
+      clearAllConversationReopenedMarkers();
+    };
+  }, [queryClient]);
 
-    previousSessionRef.current = { isAuthenticated, userId };
-    if (!sessionEnded && !identityChanged) return;
-
-    void queryClient.cancelQueries();
-    queryClient.clear();
-    useConversationDetailsStore.getState().reset();
-    useMessageComposerStore.getState().reset();
-    clearAllConversationReopenedMarkers();
-  }, [isAuthenticated, queryClient, userId]);
-
-  return null;
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }

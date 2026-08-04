@@ -8,23 +8,30 @@ import {
   invalidateNotificationFeeds,
   invalidateNotificationUnread,
 } from '../utils/notification-cache';
+import {
+  captureAuthSession,
+  isAuthSessionCurrent,
+} from '@/features/auth/stores/auth.store';
 
 export const useNotificationActions = () => {
   const queryClient = useQueryClient();
+  const session = captureAuthSession();
   const pendingIdsRef = useRef(new Set<string>());
   const markAllPendingRef = useRef(false);
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
 
   const reconcileAfterError = useCallback(async () => {
+    if (!isAuthSessionCurrent(session)) return;
     await Promise.all([
       invalidateNotificationFeeds(queryClient),
       invalidateNotificationUnread(queryClient),
     ]);
-  }, [queryClient]);
+  }, [queryClient, session]);
 
   const markOneMutation = useMutation({
     mutationFn: notificationsApi.markAsRead,
     onSuccess: async (result) => {
+      if (!isAuthSessionCurrent(session)) return;
       applyNotificationReadResult(queryClient, result);
       await invalidateNotificationFeeds(queryClient);
     },
@@ -34,6 +41,7 @@ export const useNotificationActions = () => {
   const markAllMutation = useMutation({
     mutationFn: notificationsApi.markAllAsRead,
     onSuccess: async (result) => {
+      if (!isAuthSessionCurrent(session)) return;
       applyNotificationReadResult(queryClient, result);
       await invalidateNotificationFeeds(queryClient);
     },
@@ -49,12 +57,13 @@ export const useNotificationActions = () => {
       setPendingIds(new Set(pendingIdsRef.current));
       markOneMutation.mutate(notificationId, {
         onSettled: () => {
+          if (!isAuthSessionCurrent(session)) return;
           pendingIdsRef.current.delete(notificationId);
           setPendingIds(new Set(pendingIdsRef.current));
         },
       });
     },
-    [markOneMutation],
+    [markOneMutation, session],
   );
 
   const markAll = useCallback(() => {
@@ -64,10 +73,11 @@ export const useNotificationActions = () => {
     markAllPendingRef.current = true;
     markAllMutation.mutate(undefined, {
       onSettled: () => {
+        if (!isAuthSessionCurrent(session)) return;
         markAllPendingRef.current = false;
       },
     });
-  }, [markAllMutation]);
+  }, [markAllMutation, session]);
 
   const resetActionError = useCallback(() => {
     markOneMutation.reset();

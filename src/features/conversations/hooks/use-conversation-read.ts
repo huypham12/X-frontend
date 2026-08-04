@@ -6,6 +6,10 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSocket } from '@/providers/socket-provider';
 import {
+  captureAuthSession,
+  isAuthSessionCurrent,
+} from '@/features/auth/stores/auth.store';
+import {
   invalidateNotificationFeeds,
   invalidateNotificationUnread,
 } from '@/features/notifications/utils/notification-cache';
@@ -46,6 +50,7 @@ interface ConversationReadAttempt {
 }
 
 export const useConversationRead = (conversationId: string) => {
+  const sessionRef = useRef(captureAuthSession());
   const { socket, isConnected } = useSocket();
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -74,6 +79,8 @@ export const useConversationRead = (conversationId: string) => {
 
   const reconcileAuthoritativeState = useCallback(
     (result: ConversationReadAcknowledgement | ConversationReadResult) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
+
       const didApply = applyConversationReadResult(queryClient, result);
       if (!didApply) {
         void queryClient.invalidateQueries({
@@ -97,6 +104,7 @@ export const useConversationRead = (conversationId: string) => {
 
   const handleMembershipLoss = useCallback(
     async (targetConversationId: string) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (activeConversationIdRef.current !== targetConversationId) return;
 
       const details = useConversationDetailsStore.getState();
@@ -109,7 +117,12 @@ export const useConversationRead = (conversationId: string) => {
         queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY }),
         queryClient.invalidateQueries({ queryKey: conversationKeys.unreadSummary() }),
       ]);
-      if (activeConversationIdRef.current === targetConversationId) router.replace('/messages');
+      if (
+        isAuthSessionCurrent(sessionRef.current) &&
+        activeConversationIdRef.current === targetConversationId
+      ) {
+        router.replace('/messages');
+      }
     },
     [queryClient, router],
   );
@@ -136,6 +149,8 @@ export const useConversationRead = (conversationId: string) => {
           );
         });
 
+        if (!isAuthSessionCurrent(sessionRef.current)) return 'failed' as const;
+
         if (socketResult.kind === 'ack' && socketResult.result.success) {
           reconcileAuthoritativeState(socketResult.result);
           return 'acknowledged' as const;
@@ -158,9 +173,12 @@ export const useConversationRead = (conversationId: string) => {
         const result = await conversationsApi.markAsRead(targetConversationId, {
           message_id: messageId,
         });
+        if (!isAuthSessionCurrent(sessionRef.current)) return 'failed' as const;
         reconcileAuthoritativeState(result);
         return 'acknowledged' as const;
       } catch (error) {
+        if (!isAuthSessionCurrent(sessionRef.current)) return 'failed' as const;
+
         if (axios.isAxiosError(error) && error.response?.status === 403) {
           await handleMembershipLoss(targetConversationId);
           return 'denied' as const;
@@ -190,6 +208,7 @@ export const useConversationRead = (conversationId: string) => {
     try {
       while (
         isMountedRef.current &&
+        isAuthSessionCurrent(sessionRef.current) &&
         commandGenerationRef.current === commandGeneration &&
         activeConversationIdRef.current === targetConversationId &&
         queuedMessageIdRef.current &&
@@ -225,6 +244,7 @@ export const useConversationRead = (conversationId: string) => {
 
   const acknowledgeVisibleMessage = useCallback(
     (messageId: string) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (!messageId || !isPageActive()) return;
       if (messageId === lastAcknowledgedMessageIdRef.current) {
         setLatestAttempt({ conversationId, messageId, status: 'acknowledged' });

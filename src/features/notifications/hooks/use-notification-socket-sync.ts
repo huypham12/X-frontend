@@ -4,6 +4,10 @@ import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import {
+  captureAuthSession,
+  isAuthSessionCurrent,
+} from '@/features/auth/stores/auth.store';
+import {
   applyNotificationReadState,
   applyNotificationRemoved,
   applyNotificationUnreadCount,
@@ -38,6 +42,7 @@ const notificationFingerprint = (notification: NotificationSocketItem) =>
   ].join(':');
 
 export const useNotificationSocketSync = (socket: Socket | null) => {
+  const sessionRef = useRef(captureAuthSession());
   const queryClient = useQueryClient();
   const recentEventsRef = useRef(new Map<string, string>());
 
@@ -47,6 +52,7 @@ export const useNotificationSocketSync = (socket: Socket | null) => {
     const recentEvents = recentEventsRef.current;
 
     const handleNewNotification = (notification: NotificationSocketItem) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (!notification?._id) return;
       if (
         !rememberEvent(
@@ -61,11 +67,13 @@ export const useNotificationSocketSync = (socket: Socket | null) => {
     };
 
     const handleUnreadCount = (event: NotificationUnreadCountEvent) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (!Number.isSafeInteger(event?.version) || event.version < 0) return;
       applyNotificationUnreadCount(queryClient, event);
     };
 
     const handleReadState = (event: NotificationReadStateEvent) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (!Number.isSafeInteger(event?.version) || event.version < 0) return;
       const fingerprint = `${event.action}:${event.notification_id ?? 'all'}:${event.read_at}:${event.updated_count}:${event.version}`;
       if (!rememberEvent(recentEvents, 'read-state', fingerprint)) return;
@@ -73,6 +81,7 @@ export const useNotificationSocketSync = (socket: Socket | null) => {
     };
 
     const handleUpdatedNotification = (notification: NotificationSocketItem) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (!notification?._id) return;
       if (
         !rememberEvent(
@@ -89,6 +98,7 @@ export const useNotificationSocketSync = (socket: Socket | null) => {
     };
 
     const handleRemovedNotification = (event: NotificationRemovedEvent) => {
+      if (!isAuthSessionCurrent(sessionRef.current)) return;
       if (!event?.notification_id) return;
       const fingerprint = `${event.updated_at}:${event.version ?? 'none'}:${event.unread_count ?? 'none'}`;
       if (!rememberEvent(recentEvents, `removed:${event.notification_id}`, fingerprint)) return;

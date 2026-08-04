@@ -70,13 +70,16 @@ export const ConversationSidebar = () => {
             onFocus={() => setIsSearchFocused(true)}
             placeholder="Search people and groups"
             aria-label="Search people and groups"
-            className="w-full bg-[#202327] text-white rounded-full py-2 pl-12 pr-4 focus:outline-none focus:bg-black focus:ring-1 focus:ring-white border border-transparent focus:border-white transition"
+            className="min-h-11 w-full rounded-full border border-transparent bg-[#202327] py-2 pl-12 pr-4 text-white transition focus:border-white focus:bg-black focus:outline-none focus:ring-1 focus:ring-white motion-reduce:transition-none"
           />
         </div>
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+      <div
+        aria-busy={isFetching || undefined}
+        className="custom-scrollbar flex-1 overflow-y-auto overflow-x-hidden"
+      >
         {isError && conversations ? (
           <div
             role="status"
@@ -102,7 +105,10 @@ export const ConversationSidebar = () => {
           <div role="status" aria-label="Loading conversations">
             <div aria-hidden="true" className="flex flex-col gap-4 p-4">
               {[1, 2, 3, 4, 5].map((item) => (
-                <div key={item} className="flex animate-pulse items-center gap-3">
+                <div
+                  key={item}
+                  className="flex animate-pulse items-center gap-3 motion-reduce:animate-none"
+                >
                   <div className="h-12 w-12 flex-shrink-0 rounded-full bg-gray-800" />
                   <div className="flex-1">
                     <div className="mb-2 h-4 w-1/2 rounded bg-gray-800" />
@@ -133,14 +139,16 @@ export const ConversationSidebar = () => {
             <FollowingListForChat />
           </div>
         ) : (
-          conversations?.map((conv) => (
-            <ConversationItem 
-              key={conv._id} 
-              conversation={conv} 
-              isActive={activeConversationId === conv._id}
-              isOnline={conv.type === 'direct' && isOnlineFriend(conv.partner_id)}
-            />
-          ))
+          <nav aria-label="Conversations">
+            {conversations?.map((conv) => (
+              <ConversationItem
+                key={conv._id}
+                conversation={conv}
+                isActive={activeConversationId === conv._id}
+                isOnline={conv.type === 'direct' && isOnlineFriend(conv.partner_id)}
+              />
+            ))}
+          </nav>
         )}
       </div>
     </div>

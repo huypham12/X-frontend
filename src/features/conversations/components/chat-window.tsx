@@ -75,7 +75,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
             onClick={() => {
               void refetch();
             }}
-            className="mt-4 rounded-full border border-[#536471] px-4 py-2 text-sm font-semibold text-white hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="mt-4 min-h-11 rounded-full border border-[#536471] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none"
           >
             Retry
           </button>
@@ -88,8 +88,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
         <div className="flex-1 flex items-center justify-center bg-black">
           <div
             role="status"
+            aria-busy="true"
             aria-label="Loading conversation"
-            className="h-24 w-24 animate-pulse rounded-full bg-[#181818]"
+            className="h-24 w-24 animate-pulse rounded-full bg-[#181818] motion-reduce:animate-none"
           />
         </div>
       );
@@ -159,7 +160,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
       {/* Header */}
       <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-[#2f3336] bg-black/80 p-4 backdrop-blur-md">
         {profileLink ? (
-          <Link href={profileLink} className="flex items-center gap-3 transition-opacity hover:opacity-80">
+          <Link
+            href={profileLink}
+            className="flex min-h-11 items-center gap-3 rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none"
+          >
             {headerIdentity}
           </Link>
         ) : (
@@ -176,7 +180,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
             whileTap={prefersReducedMotion ? undefined : { scale: 0.92 }}
             animate={{ backgroundColor: isDetailsOpen ? '#181818' : 'rgba(24, 24, 24, 0)' }}
             transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
-            className={`rounded-full p-2 transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+            className={`flex min-h-11 min-w-11 items-center justify-center rounded-full p-2 transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none ${
               isDetailsOpen ? 'text-[#1d9bf0]' : 'text-white'
             }`}
           >
@@ -186,12 +190,29 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
             type="button"
             onClick={handleExitConversation}
             aria-label="Close conversation"
-            className="rounded-full p-2 text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="flex min-h-11 min-w-11 items-center justify-center rounded-full p-2 text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transition-none"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
       </div>
+
+      {isRefetchError && (
+        <div
+          role="status"
+          className="flex min-h-11 shrink-0 items-center justify-between gap-3 border-b border-[#2f3336] bg-[#121212] px-4 py-2 text-xs text-gray-300"
+        >
+          <span>Conversation details may be out of date.</span>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            className="min-h-11 shrink-0 rounded-full px-3 font-semibold text-white hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isFetching ? 'Retrying…' : 'Retry'}
+          </button>
+        </div>
+      )}
       
       {/* Messages */}
       <MessageList conversationId={conversationId} />
