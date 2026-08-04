@@ -22,8 +22,9 @@ export interface UserPreview {
 export interface MessagePreview {
   message_id?: string;
   sender_id: string;
-  sender_info?: UserPreview | null;
-  kind?: MessageKind;
+  sender_info: UserPreview | null;
+  kind: MessageKind | null;
+  system_event_type: ConversationSystemEventType | null;
   content: string;
   message_type: MessageType;
 }

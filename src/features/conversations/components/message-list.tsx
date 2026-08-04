@@ -18,6 +18,8 @@ import { useConversationRead } from '../hooks/use-conversation-read';
 import { useMessageFocusPresentation } from '../hooks/use-message-focus-presentation';
 import { useMessageListPosition } from '../hooks/use-message-list-position';
 import { NewMessageButton } from './new-message-button';
+import { SystemMessageRow } from './system-message-row';
+import { isSystemMessage } from '../utils/system-message-presentation';
 
 interface MessageListProps {
   conversationId: string;
@@ -276,13 +278,31 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
               const previousMessage = displayedMessages[index - 1];
               const nextMessage = displayedMessages[index + 1];
 
+              if (isSystemMessage(message)) {
+                return (
+                  <SystemMessageRow
+                    key={message._id}
+                    message={message}
+                    isHighlighted={message._id === highlightedMessageId}
+                  />
+                );
+              }
+
               return (
                 <MessageRow
                   key={message._id}
                   message={message}
                   isMine={message.sender_id === user?._id}
-                  isFirstInCluster={previousMessage?.sender_id !== message.sender_id}
-                  isLastInCluster={nextMessage?.sender_id !== message.sender_id}
+                  isFirstInCluster={
+                    !previousMessage ||
+                    isSystemMessage(previousMessage) ||
+                    previousMessage.sender_id !== message.sender_id
+                  }
+                  isLastInCluster={
+                    !nextMessage ||
+                    isSystemMessage(nextMessage) ||
+                    nextMessage.sender_id !== message.sender_id
+                  }
                   isHighlighted={message._id === highlightedMessageId}
                   currentUserId={user?._id}
                   isRevokePending={

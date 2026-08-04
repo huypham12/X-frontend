@@ -14,6 +14,7 @@ import { useConversationDetailsStore } from '../stores/conversation-details.stor
 import { ConversationDetailsMobile } from './conversation-details-mobile';
 import { useConversationPartnerProfile } from '../hooks/use-conversation-partner-profile';
 import { useMessageComposerStore } from '../stores/message-composer.store';
+import { useActiveGroupMembershipReconciliation } from '../hooks/use-active-group-membership-reconciliation';
 
 interface ChatWindowProps {
   conversationId: string;
@@ -37,6 +38,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
   const prefersReducedMotion = useReducedMotion();
   const clearReply = useMessageComposerStore((state) => state.clearReply);
   const conversation = conversations?.find((item) => item._id === conversationId);
+  useActiveGroupMembershipReconciliation({
+    conversationId,
+    conversation,
+    isConversationListResolved: !isLoading && !isFetching && !isError && !isRefetchError,
+  });
   const partnerUsername =
     conversation?.type === 'direct' ? conversation.partner_info?.username : undefined;
   const {

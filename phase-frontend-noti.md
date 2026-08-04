@@ -268,7 +268,7 @@ Quan hệ triển khai bắt buộc: contract/session foundation -> realtime sta
 | Technical debt      | `/messages` render Home, mobile thiếu Inbox/nav                                       | Phase 3/5                                                                     |
 | Technical debt      | `any`, `read_by` legacy, response types cũ                                            | Chỉ sửa type liên quan trong Phase 1/7; không dọn lint toàn repo              |
 | Backend thiếu       | Raw notification socket không hydrate và không có fetch-by-ID                         | Fallback refetch trong Phase 2/4; Phase 4.1 nếu rich realtime là gate         |
-| Backend thiếu       | `GET /conversations` không có last-message sender projection cho group                | Fallback không prefix hoặc dùng data có sẵn; Phase 5.1 để hoàn thiện bền vững |
+| Backend đã bổ sung  | `GET /conversations` hydrate last-message sender projection theo batch                 | Phase 5.1 hoàn tất; fallback trung tính khi sender không public                |
 | Backend thiếu       | Không có API đọc current `posts` preference của follow relation                       | Không fake toggle; Phase 9.1 có điều kiện                                     |
 | Backend thiếu       | Notification target không có media thumbnail                                          | Text preview; không chặn core feed                                            |
 | Backend thiếu       | Không có participant read receipts                                                    | Không hiển thị “Đã xem bởi”; ngoài core unread scope                          |
@@ -912,16 +912,18 @@ Revert Messages landing/right-sidebar responsive composition và unread markup; 
 
 #### Phase 5.1 — Durable group last-message sender projection (chỉ mở khi có blocker)
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
+
+**Phạm vi phối hợp đã được phê duyệt:** backend `../X-ver2` và frontend cùng thay đổi để bổ sung projection public bền vững, không N+1 và không dựng identity từ ID ở client.
 
 - **Vấn đề phát hiện:** Group row cần “sender: content”, nhưng `GET /conversations` chỉ trả `last_message_preview.sender_id`.
 - **Nguyên nhân:** Group schema/formatter không hydrate sender public info cho last preview.
 - **Bằng chứng từ code:** `X-ver2/src/schemas/GroupConversation.schema.ts` định nghĩa preview chỉ có sender ID/content/type; `X-ver2/src/modules/conversation/conversation.service.ts` `formatGroupConversation` trả preview nguyên trạng và members không hydrate user.
 - **Ảnh hưởng:** Realtime message có thể có sender info trong message payload, nhưng reload/cache miss không thể render tên bền vững.
 - **Phần Phase 5 đã hoàn thành:** Inbox route, responsive list, unread state/count, fallback preview và realtime ordering.
-- **Phần còn bị chặn:** Sender prefix chính xác sau reload cho mọi group row.
+- **Phần Phase 5.1 hoàn tất:** Sender prefix chính xác sau reload cho group user message; sender bị xóa/banned/blocked dùng fallback trung tính và system preview không gắn sender prefix.
 - **Backend file/endpoint/event cần sửa:** Group/direct conversation DTO/schema projection và `conversation.service.ts` response của `GET /api/conversations`; không nhất thiết sửa stored schema nếu hydrate khi query.
-- **Contract đích sau sửa:** `last_message_preview` có public `sender_info` nullable hoặc một documented projection tương đương, có redaction khi user unavailable.
+- **Contract đích sau sửa:** `last_message_preview` có public `sender_info` nullable, `kind` và `system_event_type` nullable; có redaction khi user unavailable và fallback compatibility cho message legacy.
 - **Frontend file cần cập nhật:** Conversation types, `ConversationItem`, conversation receive/cache normalizer.
 - **Acceptance criteria:** Reload vẫn có sender prefix; deleted/blocked sender dùng fallback; no extra N+1 fetch; direct row không bị regress.
 - **Gate:** `npx tsc --noEmit`.
@@ -1140,7 +1142,7 @@ Tắt pending optimistic presentation nhưng vẫn có thể giữ stable client
 
 ### Phase 8 — Group system activity và membership/admin consistency
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Đã hoàn thành.**
 
 **Mục tiêu**
 
@@ -1378,7 +1380,7 @@ Các phase `.1` không nằm trong luồng frontend mặc định. Chúng chỉ 
 | BG-02 | Notification socket raw, không fetch-by-ID                                 | Upsert ID, placeholder, refetch page đầu/count       | Rich realtime deterministic cho item ngoài page đầu     | Phase 4.1                                       |
 | BG-03 | Notification target không có media thumbnail                               | Text preview                                         | Thumbnail an toàn                                       | Chưa mở; không chặn core                        |
 | BG-04 | Tweet thread không có endpoint anchor/fetch-around child trong parent page | Mở target child trực tiếp; focus nếu child đã load   | Parent-thread focus chính xác với history dài           | Mở backend/frontend subphase khi UX này là gate |
-| BG-05 | Group last preview chỉ có sender ID                                        | Content fallback/realtime message info nếu có        | Sender prefix bền vững sau reload                       | Phase 5.1                                       |
+| BG-05 | Group last preview trước đây chỉ có sender ID                               | Đã hydrate sender public theo batch                  | Đã hoàn tất sender prefix bền vững sau reload           | Phase 5.1 — hoàn thành                          |
 | BG-06 | Follow-post preference không có read/bootstrap state                       | Render followed-user notification đã nhận            | Toggle chính xác sau reload                             | Phase 9.1                                       |
 | BG-07 | System message thiếu public actor/affected projections                     | Backend content/copy trung tính                      | Copy có tên chính xác                                   | Phase 8.1 nếu product bắt buộc                  |
 | BG-08 | Target/actor null không có public reason                                   | Unavailable copy/disable CTA                         | Copy theo nguyên nhân                                   | Không chặn core; tránh lộ block                 |

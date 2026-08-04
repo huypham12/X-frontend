@@ -11,13 +11,13 @@ import type { MediaMetadata } from '@/features/media/types/media.type';
 import { userService } from '@/features/users/api/user.service';
 import type { Friend } from '@/features/users/types/user.type';
 import { conversationsApi } from '../api/conversations.api';
-import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import type { Conversation, GroupConversation } from '../types';
 import type { UpdateGroupPayload } from '../types/group-action.type';
 import { removeConversationCaches } from '../utils/conversation-cache';
 import { CONVERSATIONS_QUERY_KEY } from './use-conversations';
 import { GROUP_MEMBERS_QUERY_KEY } from './use-group-members';
 import { conversationKeys } from '../constants/conversation-query-keys';
+import { clearConversationUiState } from '../utils/conversation-ui-state';
 
 interface ApiErrorBody {
   code?: string;
@@ -129,7 +129,6 @@ export const useGroupActions = (conversation: GroupConversation) => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const currentUserId = useAuthStore((state) => state.user?._id);
-  const closeDetails = useConversationDetailsStore((state) => state.closeDetails);
   const isAdmin = isCurrentUserGroupAdmin(conversation, currentUserId);
   const invalidateGroupData = async () => {
     await Promise.all([
@@ -138,8 +137,8 @@ export const useGroupActions = (conversation: GroupConversation) => {
     ]);
   };
   const handleDepartureSuccess = async (message: string) => {
+    clearConversationUiState(conversation._id);
     await removeConversationCaches(queryClient, conversation._id);
-    closeDetails();
     router.replace('/messages');
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY }),

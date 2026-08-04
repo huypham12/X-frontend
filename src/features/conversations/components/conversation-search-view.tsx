@@ -7,6 +7,10 @@ import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useMessageSearch } from '../hooks/use-message-search';
 import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import type { Conversation, Message } from '../types';
+import {
+  getSystemMessageText,
+  isSystemMessage,
+} from '../utils/system-message-presentation';
 
 interface ConversationSearchViewProps {
   conversation: Conversation;
@@ -30,6 +34,8 @@ const getSenderLabel = (
 };
 
 const getMessageSnippet = (message: Message) => {
+  if (isSystemMessage(message)) return getSystemMessageText(message);
+
   const content = message.content.trim();
   if (content) return content;
   if (message.media_ids.length > 0) return 'Media message';
@@ -118,28 +124,38 @@ export const ConversationSearchView = ({ conversation }: ConversationSearchViewP
           </div>
         ) : (
           <div className="space-y-2">
-            {messages.map((message) => (
-              <article key={message._id} className="rounded-xl bg-[#121212] p-4">
-                <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
-                  <span className="truncate font-semibold text-gray-300">
-                    {getSenderLabel(message, conversation, currentUserId)}
-                  </span>
-                  <time dateTime={message.send_at} className="shrink-0">
-                    {format(new Date(message.send_at), 'MMM d, yyyy · h:mm a')}
-                  </time>
-                </div>
-                <p className="mt-2 line-clamp-3 break-words text-sm leading-5 text-white">
-                  {getMessageSnippet(message)}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => focusMessage(conversation._id, message._id)}
-                  className="mt-3 rounded-full border border-[#536471] px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                >
-                  View in conversation
-                </button>
-              </article>
-            ))}
+            {messages.map((message) => {
+              const isSystem = isSystemMessage(message);
+
+              return (
+                <article key={message._id} className="rounded-xl bg-[#121212] p-4">
+                  <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
+                    <span className="truncate font-semibold text-gray-300">
+                      {isSystem
+                        ? 'Group activity'
+                        : getSenderLabel(message, conversation, currentUserId)}
+                    </span>
+                    <time dateTime={message.send_at} className="shrink-0">
+                      {format(new Date(message.send_at), 'MMM d, yyyy · h:mm a')}
+                    </time>
+                  </div>
+                  <p
+                    className={`mt-2 line-clamp-3 break-words text-sm leading-5 ${
+                      isSystem ? 'text-gray-300' : 'text-white'
+                    }`}
+                  >
+                    {getMessageSnippet(message)}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => focusMessage(conversation._id, message._id)}
+                    className="mt-3 rounded-full border border-[#536471] px-3 py-1.5 text-xs font-semibold text-white transition-colors duration-200 hover:bg-[#181818] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  >
+                    View in conversation
+                  </button>
+                </article>
+              );
+            })}
 
             {hasNextPage && (
               <button

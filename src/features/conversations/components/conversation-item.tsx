@@ -8,6 +8,7 @@ import { FriendPresenceDot } from '@/features/users/components/friend-presence-d
 import { BellOff, Pin } from 'lucide-react';
 import { getActiveConversationMute } from '../hooks/use-conversation-actions';
 import Link from 'next/link';
+import { getSystemPreviewText } from '../utils/system-message-presentation';
 
 interface ConversationItemProps {
   conversation: Conversation;
@@ -66,20 +67,17 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   const preview = conversation.last_message_preview;
   const lastMessageContent =
     (lastMessageType && messageTypeLabels[lastMessageType]) ||
-    preview?.content ||
-    (preview?.kind === 'system' ? 'Group activity' : 'Started a conversation');
-  const senderPrefix =
-    preview?.kind === 'system'
-      ? ''
-      : conversation.type === 'direct'
-        ? isSentByMe
-          ? 'You: '
-          : ''
-        : preview?.kind === 'user' && isSentByMe
-          ? 'You: '
-          : preview?.kind === 'user' && preview.sender_info?.name
-            ? `${preview.sender_info.name}: `
-            : '';
+    (preview ? getSystemPreviewText(preview) : 'Started a conversation');
+  let senderPrefix = '';
+  if (preview?.kind !== 'system' && conversation.type === 'direct' && isSentByMe) {
+    senderPrefix = 'You: ';
+  } else if (conversation.type === 'group' && preview?.kind === 'user') {
+    senderPrefix = isSentByMe
+      ? 'You: '
+      : preview.sender_info?.name
+        ? `${preview.sender_info.name}: `
+        : 'Group member: ';
+  }
   const lastMessageText = `${senderPrefix}${lastMessageContent}`;
   const unreadLabel = isUnread
     ? `${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`

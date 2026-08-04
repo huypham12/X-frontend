@@ -21,6 +21,7 @@ import {
 } from '../utils/conversation-reopen-state';
 import { useConversationDetailsStore } from '../stores/conversation-details.store';
 import { useMessageComposerStore } from '../stores/message-composer.store';
+import { clearConversationUiState } from '../utils/conversation-ui-state';
 import type { Conversation, Message, MessageType } from '../types';
 import { MESSAGES_QUERY_KEY } from './use-messages';
 import type { ConversationReadStateEvent } from '../types/conversation-unread.type';
@@ -76,18 +77,18 @@ export const useConversationSocketSync = (socket: Socket | null) => {
       if (!event?.conversation_id) return;
 
       const currentUserId = useAuthStore.getState().user?._id;
+      const affectedUserIds = Array.isArray(event.affected_user_ids)
+        ? event.affected_user_ids
+        : [];
       const currentUserLeft = currentUserId
         ? (event.change_type === 'member_left' && event.actor_id === currentUserId) ||
           (event.change_type === 'member_removed' &&
-            event.affected_user_ids.includes(currentUserId)) ||
+            affectedUserIds.includes(currentUserId)) ||
           (event.change_type === 'admin_transferred' && event.actor_id === currentUserId)
         : false;
 
       if (currentUserLeft) {
-        const details = useConversationDetailsStore.getState();
-        if (details.openConversationId === event.conversation_id) details.closeDetails();
-        const composer = useMessageComposerStore.getState();
-        if (composer.conversationId === event.conversation_id) composer.clearReply();
+        clearConversationUiState(event.conversation_id);
         if (pathnameRef.current === `/messages/${event.conversation_id}`) {
           router.replace('/messages');
         }
@@ -144,7 +145,8 @@ export const useConversationSocketSync = (socket: Socket | null) => {
                     message_id: newMessage._id,
                     sender_id: newMessage.sender_id,
                     sender_info: newMessage.sender_info,
-                    kind: newMessage.kind,
+                    kind: newMessage.kind ?? 'user',
+                    system_event_type: newMessage.system_event_type ?? null,
                     content: newMessage.content,
                     message_type: messageType,
                   },
