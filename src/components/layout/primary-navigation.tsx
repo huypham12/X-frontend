@@ -141,7 +141,6 @@ export const PrimaryNavigationLinks = ({
               <CountBadge
                 count={badgeState.count}
                 isLoading={badgeState.isInitialLoading}
-                isSyncing={badgeState.isSyncing}
               />
             ) : null}
           </span>

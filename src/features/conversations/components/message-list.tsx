@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useMessages } from '../hooks/use-messages';
 import { MessageRow } from './message-row';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
@@ -13,6 +13,11 @@ import { useMessageActions } from '../hooks/use-message-actions';
 import { RevokeMessageDialog } from './revoke-message-dialog';
 import { DeleteMessageDialog } from './delete-message-dialog';
 import type { Message } from '../types';
+import { useMessageVisibility } from '../hooks/use-message-visibility';
+import { useConversationRead } from '../hooks/use-conversation-read';
+import { useMessageFocusPresentation } from '../hooks/use-message-focus-presentation';
+import { useMessageListPosition } from '../hooks/use-message-list-position';
+import { NewMessageButton } from './new-message-button';
 
 interface MessageListProps {
   conversationId: string;
@@ -49,7 +54,10 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
     refetch: refetchContext,
   } = useMessageContext(conversationId, targetMessageId);
   const prefersReducedMotion = useReducedMotion();
-  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [navigationReadTarget, setNavigationReadTarget] = useState<{
+    conversationId: string;
+    messageId: string;
+  } | null>(null);
   const [messageToRevoke, setMessageToRevoke] = useState<Message | null>(null);
   const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
   const {
@@ -63,15 +71,70 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
     reactionPendingMessageId,
     toggleReaction,
   } = useMessageActions(conversationId);
-  const messageListRef = useRef<HTMLDivElement>(null);
-  const hasInitiallyScrolledRef = useRef(false);
-  const isNearBottomRef = useRef(true);
-  const previousLatestMessageIdRef = useRef<string | undefined>(undefined);
-  const wasViewingContextRef = useRef(false);
-  
+
   const { ref: loadMoreRef, inView } = useInView();
   const initialPageMessageCount = data?.pages?.[0]?.messages?.length ?? 0;
   const latestMessageId = data?.pages?.[0]?.messages?.[0]?._id;
+  const newestFirstMessages = useMemo(
+    () => data?.pages.flatMap((page) => page.messages) ?? [],
+    [data],
+  );
+  const newestFirstMessageIds = useMemo(
+    () => newestFirstMessages.map((message) => message._id),
+    [newestFirstMessages],
+  );
+  const allMessages = useMemo(() => [...newestFirstMessages].reverse(), [newestFirstMessages]);
+  const displayedMessages = useMemo(
+    () => (targetMessageId ? contextData?.messages ?? [] : allMessages),
+    [allMessages, contextData, targetMessageId],
+  );
+  const hasContextData = Boolean(contextData);
+  const displayedMessageIds = useMemo(
+    () => displayedMessages.map((message) => message._id),
+    [displayedMessages],
+  );
+  const navigationReadTargetId =
+    navigationReadTarget?.conversationId === conversationId
+      ? navigationReadTarget.messageId
+      : null;
+  const readTargetMessageId = targetMessageId ?? navigationReadTargetId ?? latestMessageId ?? null;
+  const {
+    messageListRef,
+    isPageActive,
+    isNearBottom,
+    isReadTargetVisible,
+    newMessageCount,
+    firstNewMessageId,
+    handleScroll,
+    consumeNewMessagesThrough,
+    measurePosition,
+  } = useMessageVisibility({
+    conversationId,
+    newestFirstMessageIds,
+    renderedMessageIds: displayedMessageIds,
+    readTargetMessageId,
+    isViewingContext: Boolean(targetMessageId),
+  });
+  const { acknowledgeVisibleMessage, latestAttempt } = useConversationRead(conversationId);
+  const { highlightedMessageId, presentMessage } = useMessageFocusPresentation({
+    messageListRef,
+    targetMessageId,
+    hasContextData,
+    prefersReducedMotion,
+  });
+  const hasInitiallyPositioned = useMessageListPosition({
+    conversationId,
+    targetMessageId,
+    isLoading,
+    initialPageMessageCount,
+    latestMessageId,
+    newestFirstMessageIds,
+    messageListRef,
+    isNearBottom,
+    isPageActive,
+    prefersReducedMotion,
+    measurePosition,
+  });
 
   useEffect(() => {
     if (!messageToDelete || isDeletePending) return;
@@ -85,7 +148,8 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
     const currentMessage = timelineMessage ?? contextMessage;
 
     if (!currentMessage || currentMessage.status !== 'sent') {
-      setMessageToDelete(null);
+      const clearFrame = window.requestAnimationFrame(() => setMessageToDelete(null));
+      return () => window.cancelAnimationFrame(clearFrame);
     }
   }, [contextData, data, isDeletePending, messageToDelete]);
 
@@ -102,74 +166,40 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
   }, [clearFocusedMessage, conversationId, targetConversationId]);
 
   useEffect(() => {
-    hasInitiallyScrolledRef.current = false;
-    isNearBottomRef.current = true;
-    previousLatestMessageIdRef.current = undefined;
-  }, [conversationId]);
+    const isExactNavigationTarget = Boolean(targetMessageId || navigationReadTargetId);
+    const canAcknowledge =
+      isPageActive &&
+      isReadTargetVisible &&
+      (isExactNavigationTarget || (hasInitiallyPositioned && isNearBottom));
+    if (!readTargetMessageId || !canAcknowledge) return;
 
-  // Scroll only the message container, never the page containing the composer.
+    acknowledgeVisibleMessage(readTargetMessageId);
+  }, [
+    acknowledgeVisibleMessage,
+    hasInitiallyPositioned,
+    isNearBottom,
+    isPageActive,
+    isReadTargetVisible,
+    navigationReadTargetId,
+    readTargetMessageId,
+    targetMessageId,
+  ]);
+
   useEffect(() => {
-    const messageList = messageListRef.current;
     if (
-      !targetMessageId &&
-      !isLoading &&
-      initialPageMessageCount > 0 &&
-      messageList &&
-      !hasInitiallyScrolledRef.current
+      !navigationReadTargetId ||
+      latestAttempt?.messageId !== navigationReadTargetId ||
+      latestAttempt.status !== 'acknowledged'
     ) {
-      messageList.scrollTop = messageList.scrollHeight;
-      hasInitiallyScrolledRef.current = true;
-    }
-  }, [isLoading, initialPageMessageCount, conversationId, targetMessageId]);
-
-  // Keep the user's reading position when they are looking at older messages.
-  useEffect(() => {
-    const messageList = messageListRef.current;
-    const previousLatestMessageId = previousLatestMessageIdRef.current;
-    const hasNewMessage = Boolean(previousLatestMessageId && latestMessageId !== previousLatestMessageId);
-
-    if (messageList && hasNewMessage && isNearBottomRef.current && !targetMessageId) {
-      messageList.scrollTo({ top: messageList.scrollHeight, behavior: 'smooth' });
+      return;
     }
 
-    previousLatestMessageIdRef.current = latestMessageId;
-  }, [latestMessageId, targetMessageId]);
-
-  useEffect(() => {
-    if (!targetMessageId || !contextData) return;
-
-    let highlightTimeout: number | undefined;
-    const scrollFrame = window.requestAnimationFrame(() => {
-      setHighlightedMessageId(targetMessageId);
-      const targetElement = messageListRef.current?.querySelector<HTMLElement>(
-        `[data-message-id="${targetMessageId}"]`,
-      );
-      targetElement?.scrollIntoView({
-        block: 'center',
-        behavior: prefersReducedMotion ? 'auto' : 'smooth',
-      });
-      highlightTimeout = window.setTimeout(() => setHighlightedMessageId(null), 1800);
+    const clearFrame = window.requestAnimationFrame(() => {
+      consumeNewMessagesThrough(navigationReadTargetId);
+      setNavigationReadTarget(null);
     });
-
-    return () => {
-      window.cancelAnimationFrame(scrollFrame);
-      if (highlightTimeout) window.clearTimeout(highlightTimeout);
-    };
-  }, [contextData, prefersReducedMotion, targetMessageId]);
-
-  useEffect(() => {
-    const wasViewingContext = wasViewingContextRef.current;
-    wasViewingContextRef.current = Boolean(targetMessageId);
-
-    if (!wasViewingContext || targetMessageId) return;
-
-    const scrollFrame = window.requestAnimationFrame(() => {
-      const messageList = messageListRef.current;
-      if (messageList) messageList.scrollTop = messageList.scrollHeight;
-    });
-
-    return () => window.cancelAnimationFrame(scrollFrame);
-  }, [targetMessageId]);
+    return () => window.cancelAnimationFrame(clearFrame);
+  }, [consumeNewMessagesThrough, latestAttempt, navigationReadTargetId]);
 
   if (!targetMessageId && isLoading) {
     return (
@@ -187,23 +217,14 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
     );
   }
 
-  // Flatten the pages and reverse them because the API returns newest first (sort -1)
-  // We want to display oldest at top, newest at bottom
-  const allMessages = data?.pages.flatMap((page) => page.messages).reverse() || [];
-  const displayedMessages = targetMessageId ? contextData?.messages || [] : allMessages;
-
   return (
     <>
-      <div
-      ref={messageListRef}
-      onScroll={(event) => {
-        const messageList = event.currentTarget;
-        const distanceFromBottom =
-          messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight;
-        isNearBottomRef.current = distanceFromBottom < 120;
-      }}
-      className="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-4"
-    >
+      <div className="relative flex min-h-0 flex-1">
+        <div
+          ref={messageListRef}
+          onScroll={handleScroll}
+          className="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-4"
+        >
       {targetMessageId && (
         <div className="sticky top-0 z-[1] mb-4 flex justify-center bg-black/90 py-2 backdrop-blur-sm">
           <button
@@ -285,6 +306,28 @@ export const MessageList: React.FC<MessageListProps> = ({ conversationId }) => {
           <div className="h-1" />
         </>
       )}
+        </div>
+        {!targetMessageId && newMessageCount > 0 && firstNewMessageId && (
+          <NewMessageButton
+            count={newMessageCount}
+            isRetry={
+              latestAttempt?.messageId === firstNewMessageId &&
+              latestAttempt.status === 'failed'
+            }
+            onActivate={() => {
+              const isRetryingVisibleTarget =
+                navigationReadTargetId === firstNewMessageId &&
+                latestAttempt?.messageId === firstNewMessageId &&
+                latestAttempt.status === 'failed' &&
+                isPageActive &&
+                isReadTargetVisible;
+
+              setNavigationReadTarget({ conversationId, messageId: firstNewMessageId });
+              presentMessage(firstNewMessageId, true);
+              if (isRetryingVisibleTarget) acknowledgeVisibleMessage(firstNewMessageId);
+            }}
+          />
+        )}
       </div>
       <RevokeMessageDialog
         message={messageToRevoke}

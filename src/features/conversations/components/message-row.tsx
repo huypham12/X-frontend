@@ -47,6 +47,7 @@ export const MessageRow = ({
   return (
     <div
       data-message-id={message._id}
+      tabIndex={-1}
       className={`flex w-full rounded-xl px-1 py-0.5 transition-colors duration-200 motion-reduce:transition-none ${
         isMine ? 'justify-end' : 'justify-start'
       } ${isLastInCluster ? 'mb-3' : ''} ${

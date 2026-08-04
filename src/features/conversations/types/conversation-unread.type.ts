@@ -20,6 +20,24 @@ export interface ConversationReadResult {
   version: number;
 }
 
+export interface ConversationReadAcknowledgement {
+  success: true;
+  conversation_id: string;
+  unread_message_count: number;
+  unread_conversation_count: number;
+  total_unread_message_count: number;
+  version: number;
+}
+
+export interface ConversationReadErrorAcknowledgement {
+  success: false;
+  error?: {
+    code?: string;
+    conversation_id?: string;
+    message?: string;
+  };
+}
+
 export interface ConversationReadStateEvent {
   conversation_id: string;
   last_read_message_id: string | null;

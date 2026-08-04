@@ -1,6 +1,8 @@
 import { notifyManager, type QueryClient } from '@tanstack/react-query';
 import type { Conversation } from '../types';
 import type {
+  ConversationReadAcknowledgement,
+  ConversationReadResult,
   ConversationReadStateEvent,
   ConversationUnreadSummary,
 } from '../types/conversation-unread.type';
@@ -109,6 +111,116 @@ export const applyConversationReadState = (
           unread_message_count: event.unread_message_count,
           last_read_message_id: event.last_read_message_id,
           last_read_at: event.last_read_at,
+        };
+      });
+      return changed ? nextConversations : conversations;
+    });
+  });
+
+  if (wasSummaryFetching) {
+    void queryClient.invalidateQueries({
+      queryKey: conversationKeys.unreadSummary(),
+      exact: true,
+      refetchType: 'active',
+    });
+  }
+  if (wasConversationListFetching) {
+    void queryClient.invalidateQueries({
+      queryKey: CONVERSATIONS_QUERY_KEY,
+      exact: true,
+      refetchType: 'active',
+    });
+  }
+
+  return true;
+};
+
+export const applyConversationReadResult = (
+  queryClient: QueryClient,
+  result: ConversationReadResult | ConversationReadAcknowledgement,
+) => {
+  const currentSummary = queryClient.getQueryData<ConversationUnreadSummary>(
+    conversationKeys.unreadSummary(),
+  );
+
+  if (currentSummary && result.version < currentSummary.version) {
+    void queryClient.invalidateQueries({
+      queryKey: CONVERSATIONS_QUERY_KEY,
+      exact: true,
+      refetchType: 'active',
+    });
+    return true;
+  }
+  if (!currentSummary) return false;
+
+  const hasExactReadPosition = 'last_read_message_id' in result;
+  const wasSummaryFetching =
+    queryClient.isFetching({
+      queryKey: conversationKeys.unreadSummary(),
+      exact: true,
+    }) > 0;
+  const wasConversationListFetching =
+    queryClient.isFetching({ queryKey: CONVERSATIONS_QUERY_KEY, exact: true }) > 0;
+
+  void queryClient.cancelQueries(
+    { queryKey: conversationKeys.unreadSummary(), exact: true },
+    { revert: false },
+  );
+  void queryClient.cancelQueries(
+    { queryKey: CONVERSATIONS_QUERY_KEY, exact: true },
+    { revert: false },
+  );
+
+  notifyManager.batch(() => {
+    queryClient.setQueryData<ConversationUnreadSummary>(
+      conversationKeys.unreadSummary(),
+      (summary) => {
+        if (!summary || result.version < summary.version) return summary;
+        if (
+          result.version === summary.version &&
+          result.unread_conversation_count === summary.unread_conversation_count &&
+          result.total_unread_message_count === summary.total_unread_message_count
+        ) {
+          return summary;
+        }
+
+        return {
+          unread_conversation_count: result.unread_conversation_count,
+          total_unread_message_count: result.total_unread_message_count,
+          version: result.version,
+          // The command acknowledgement does not expose the server timestamp.
+          // Keep the last authoritative timestamp until read-state/REST reconciliation arrives.
+          updated_at: summary.updated_at,
+        };
+      },
+    );
+
+    queryClient.setQueryData<Conversation[]>(CONVERSATIONS_QUERY_KEY, (conversations) => {
+      if (!conversations) return conversations;
+      let changed = false;
+      const nextConversations = conversations.map((conversation) => {
+        if (conversation._id !== result.conversation_id) return conversation;
+
+        const lastReadMessageId = hasExactReadPosition
+          ? result.last_read_message_id
+          : conversation.last_read_message_id;
+        const lastReadAt = hasExactReadPosition
+          ? result.last_read_at
+          : conversation.last_read_at;
+        if (
+          conversation.unread_message_count === result.unread_message_count &&
+          conversation.last_read_message_id === lastReadMessageId &&
+          conversation.last_read_at === lastReadAt
+        ) {
+          return conversation;
+        }
+
+        changed = true;
+        return {
+          ...conversation,
+          unread_message_count: result.unread_message_count,
+          last_read_message_id: lastReadMessageId,
+          last_read_at: lastReadAt,
         };
       });
       return changed ? nextConversations : conversations;

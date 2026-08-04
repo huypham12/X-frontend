@@ -928,7 +928,9 @@ Revert Messages landing/right-sidebar responsive composition và unread markup; 
 
 ### Phase 6 — Active conversation read semantics
 
-**Trạng thái: Chưa triển khai.**
+**Trạng thái: Hoàn thành một phần.**
+
+> Blocker: backend `POST /conversations/:conversation_id/read` và `@conversation:read` hiện chưa invalidate/phát `@notification:removed` cho `message_reply`/`message_mention` trong committed read position (`../X-ver2/frontend-notification-contract.md`, mục Conversation unread); frontend chỉ đối soát feed/count, không tự ẩn item.
 
 **Mục tiêu**
 
